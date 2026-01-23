@@ -284,7 +284,10 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
   },
 
   zoomOut: () => {
-    set((state) => ({ zoomLevel: Math.max(state.zoomLevel / 2, 1) }));
+    set((state) => {
+      const newZoom = state.zoomLevel / 2;
+      return { zoomLevel: newZoom <= 1 ? 1 : newZoom };
+    });
   },
 }));
 

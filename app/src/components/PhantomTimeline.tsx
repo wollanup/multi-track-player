@@ -131,12 +131,15 @@ const PhantomTimeline = () => {
     
     const wavesurfer = wavesurferRef.current;
     
-    // Simple zoom like the official example: just pass pixels per second
-    // At zoomLevel 1, use default (10px/sec), then 50, 100, 200, etc.
-    const minPxPerSec = zoomLevel === 1 ? 10 : 50 * zoomLevel;
-    
     try {
-      wavesurfer.zoom(minPxPerSec);
+      if (zoomLevel === 1) {
+        // Reset to minimal zoom to fit everything
+        wavesurfer.zoom(1);
+      } else {
+        // Apply custom zoom
+        const minPxPerSec = 50 * zoomLevel;
+        wavesurfer.zoom(minPxPerSec);
+      }
     } catch {
       // Silently ignore if audio not loaded yet
     }
