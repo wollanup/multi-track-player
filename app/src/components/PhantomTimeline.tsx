@@ -18,6 +18,10 @@ const PhantomTimeline = () => {
   useEffect(() => {
     if (!containerRef.current || playbackState.duration === 0) return;
 
+    // Create regions plugin instance
+    const regions = RegionsPlugin.create();
+    regionsPluginRef.current = regions;
+
     const wavesurfer = WaveSurfer.create({
       container: containerRef.current,
       waveColor: 'transparent',
@@ -28,14 +32,10 @@ const PhantomTimeline = () => {
       height: 60,
       normalize: true,
       interact: true,
-      ...(zoomLevel > 1 && { minPxPerSec: 50 * zoomLevel }),
+      plugins: [regions],
     });
 
     wavesurferRef.current = wavesurfer;
-
-    // Register regions plugin
-    const regions = wavesurfer.registerPlugin(RegionsPlugin.create());
-    regionsPluginRef.current = regions;
 
     // Style regions when created
     regions.on('region-created', (region) => {
@@ -116,7 +116,24 @@ const PhantomTimeline = () => {
       loopRegionRef.current = null;
       wavesurfer.destroy();
     };
-  }, [playbackState.duration, seek, theme, zoomLevel, setLoopRegion]);
+  }, [playbackState.duration, seek, theme, setLoopRegion]);
+
+  // Handle zoom separately without recreating wavesurfer
+  useEffect(() => {
+    if (!wavesurferRef.current || !isReady) return;
+    
+    const wavesurfer = wavesurferRef.current;
+    
+    // Simple zoom like the official example: just pass pixels per second
+    // At zoomLevel 1, use default (10px/sec), then 50, 100, 200, etc.
+    const minPxPerSec = zoomLevel === 1 ? 10 : 50 * zoomLevel;
+    
+    try {
+      wavesurfer.zoom(minPxPerSec);
+    } catch {
+      // Silently ignore if audio not loaded yet
+    }
+  }, [zoomLevel, isReady]);
 
   // Manage loop region separately - only when ready
   useEffect(() => {
@@ -130,8 +147,17 @@ const PhantomTimeline = () => {
       loopRegionRef.current = null;
     }
 
+    // If setting loop, show a marker at the start position
+    if (loopRegion.isSettingLoop) {
+      const marker = regionsPluginRef.current.addRegion({
+        start: loopRegion.loopStartMarker,
+        content: '⏱',
+        color: theme.palette.warning.main,
+      });
+      loopRegionRef.current = marker;
+    }
     // Create new region if valid
-    if (hasValidLoop) {
+    else if (hasValidLoop) {
       const region = regionsPluginRef.current.addRegion({
         start: loopRegion.start,
         end: loopRegion.end,
@@ -143,7 +169,7 @@ const PhantomTimeline = () => {
       });
       loopRegionRef.current = region;
     }
-  }, [isReady, loopRegion.start, loopRegion.end, loopRegion.enabled, playbackState.duration, theme]);
+  }, [isReady, loopRegion.start, loopRegion.end, loopRegion.enabled, loopRegion.isSettingLoop, loopRegion.loopStartMarker, playbackState.duration, theme]);
 
   // Update cursor position
   const lastUpdateTimeRef = useRef(0);

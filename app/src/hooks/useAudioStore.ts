@@ -35,7 +35,7 @@ const saveLoopRegion = (loopRegion: any) => {
 // Load loop region from localStorage
 const loadLoopRegion = () => {
   const stored = localStorage.getItem('practice-tracks-loop');
-  return stored ? JSON.parse(stored) : { enabled: false, start: 0, end: 0 };
+  return stored ? { ...JSON.parse(stored), isSettingLoop: false, loopStartMarker: 0 } : { enabled: false, start: 0, end: 0, isSettingLoop: false, loopStartMarker: 0 };
 };
 
 // Save active loop track ID to localStorage
@@ -249,9 +249,19 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
   },
 
   setLoopRegion: (start: number, end: number) => {
-    const newLoopRegion = { ...get().loopRegion, start, end };
+    const newLoopRegion = { ...get().loopRegion, start, end, isSettingLoop: false, loopStartMarker: 0 };
     set({ loopRegion: newLoopRegion });
     saveLoopRegion(newLoopRegion);
+  },
+
+  startSettingLoop: (startTime: number) => {
+    const newLoopRegion = { ...get().loopRegion, isSettingLoop: true, loopStartMarker: startTime };
+    set({ loopRegion: newLoopRegion });
+  },
+
+  cancelSettingLoop: () => {
+    const newLoopRegion = { ...get().loopRegion, isSettingLoop: false, loopStartMarker: 0 };
+    set({ loopRegion: newLoopRegion });
   },
 
   toggleLoop: () => {
@@ -270,11 +280,11 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
   },
 
   zoomIn: () => {
-    set((state) => ({ zoomLevel: Math.min(state.zoomLevel * 1.5, 20) }));
+    set((state) => ({ zoomLevel: Math.min(state.zoomLevel * 2, 20) }));
   },
 
   zoomOut: () => {
-    set((state) => ({ zoomLevel: Math.max(state.zoomLevel / 1.5, 1) }));
+    set((state) => ({ zoomLevel: Math.max(state.zoomLevel / 2, 1) }));
   },
 }));
 

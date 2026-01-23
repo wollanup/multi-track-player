@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import {
   Button,
   Stack,
@@ -11,9 +10,7 @@ import { useAudioStore } from '../hooks/useAudioStore';
 
 const LoopControls = () => {
   const { t } = useTranslation();
-  const { loopRegion, setLoopRegion, playbackState, toggleLoop } = useAudioStore();
-  const [isSettingLoop, setIsSettingLoop] = useState(false);
-  const [loopStartTime, setLoopStartTime] = useState(0);
+  const { loopRegion, setLoopRegion, startSettingLoop, cancelSettingLoop, playbackState, toggleLoop } = useAudioStore();
   
   const hasLoopDefined = loopRegion.start < loopRegion.end && loopRegion.end > 0;
 
@@ -24,12 +21,7 @@ const LoopControls = () => {
   };
 
   const handleLoopButtonClick = () => {
-    if (!isSettingLoop) {
-      // First click: mark loop start
-      const currentTime = playbackState.currentTime;
-      setLoopStartTime(currentTime);
-      setIsSettingLoop(true);
-      
+    if (!loopRegion.isSettingLoop) {
       // Clear existing loop completely before starting new one
       if (hasLoopDefined) {
         setLoopRegion(0, 0);
@@ -37,20 +29,23 @@ const LoopControls = () => {
           toggleLoop();
         }
       }
+      
+      // First click: mark loop start
+      const currentTime = playbackState.currentTime;
+      startSettingLoop(currentTime);
     } else {
       // Second click: mark loop end and enable
       const currentTime = playbackState.currentTime;
       
       // Ensure end is after start (minimum 0.1s gap)
-      if (currentTime > loopStartTime + 0.1) {
-        setLoopRegion(loopStartTime, currentTime);
+      if (currentTime > loopRegion.loopStartMarker + 0.1) {
+        setLoopRegion(loopRegion.loopStartMarker, currentTime);
         toggleLoop(); // Enable loop
       } else {
         // Too short, cancel
         alert(t('loop.tooShort'));
+        cancelSettingLoop();
       }
-      
-      setIsSettingLoop(false);
     }
   };
 
@@ -60,7 +55,7 @@ const LoopControls = () => {
     if (loopRegion.enabled) {
       toggleLoop();
     }
-    setIsSettingLoop(false);
+    cancelSettingLoop();
   };
 
   return (
@@ -70,9 +65,9 @@ const LoopControls = () => {
         <Button
           variant="contained"
           size="large"
-          color={isSettingLoop ? 'error' : 'primary'}
+          color={loopRegion.isSettingLoop ? 'error' : 'primary'}
           onClick={handleLoopButtonClick}
-          startIcon={isSettingLoop ? <Stop /> : <PlayArrow />}
+          startIcon={loopRegion.isSettingLoop ? <Stop /> : <PlayArrow />}
           sx={{ 
             py: 2,
             fontSize: '1.1rem',
@@ -80,17 +75,17 @@ const LoopControls = () => {
             fontWeight: 600,
           }}
         >
-          {isSettingLoop ? t('loop.setEnd') : t('loop.setStart')}
+          {loopRegion.isSettingLoop ? t('loop.setEnd') : t('loop.setStart')}
         </Button>
 
         {/* Status display */}
-        {isSettingLoop && (
+        {loopRegion.isSettingLoop && (
           <Typography variant="body2" color="warning.main" textAlign="center" fontWeight={600}>
-            ⏱ {t('loop.waitingForEnd')}: {formatTime(loopStartTime)}
+            ⏱ {t('loop.waitingForEnd')}: {formatTime(loopRegion.loopStartMarker)}
           </Typography>
         )}
         
-        {hasLoopDefined && !isSettingLoop && (
+        {hasLoopDefined && !loopRegion.isSettingLoop && (
           <Box>
             {/* Loop info */}
             <Typography 

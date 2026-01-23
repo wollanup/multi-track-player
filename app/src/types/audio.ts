@@ -20,6 +20,8 @@ export interface LoopRegion {
   enabled: boolean;
   start: number;
   end: number;
+  isSettingLoop: boolean;
+  loopStartMarker: number;
 }
 
 export interface AudioStore {
@@ -48,6 +50,8 @@ export interface AudioStore {
   setMasterVolume: (volume: number) => void;
   
   setLoopRegion: (start: number, end: number) => void;
+  startSettingLoop: (startTime: number) => void;
+  cancelSettingLoop: () => void;
   toggleLoop: () => void;
   setActiveLoopTrack: (trackId: string | null) => void;
   toggleLoopPanel: () => void;

@@ -38,6 +38,10 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
       ? theme.palette.action.disabled
       : track.color + '80'; // Add 50% opacity (80 in hex = 128/255)
 
+    // Create regions plugin instance
+    const regions = RegionsPlugin.create();
+    regionsPluginRef.current = regions;
+
     const wavesurfer = WaveSurfer.create({
       container: containerRef.current,
       waveColor,
@@ -50,14 +54,10 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
       height: 60,
       normalize: true,
       interact: true,
-      ...(zoomLevel > 1 && { minPxPerSec: 50 * zoomLevel }),
+      plugins: [regions],
     });
 
     wavesurferRef.current = wavesurfer;
-
-    // Register regions plugin for read-only loop display
-    const regions = wavesurfer.registerPlugin(RegionsPlugin.create());
-    regionsPluginRef.current = regions;
 
     // Style regions when created (read-only regions don't need visible handles)
     regions.on('region-created', (region) => {
@@ -92,7 +92,24 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
       loopRegionRef.current = null;
       wavesurfer.destroy();
     };
-  }, [track.buffer, track.color, track.isMuted, seek, theme, zoomLevel]);
+  }, [track.buffer, track.color, track.isMuted, seek, theme]);
+
+  // Handle zoom separately without recreating wavesurfer
+  useEffect(() => {
+    if (!wavesurferRef.current || !isReady) return;
+    
+    const wavesurfer = wavesurferRef.current;
+    
+    // Simple zoom like the official example: just pass pixels per second
+    // At zoomLevel 1, use default (10px/sec), then 50, 100, 200, etc.
+    const minPxPerSec = zoomLevel === 1 ? 10 : 50 * zoomLevel;
+    
+    try {
+      wavesurfer.zoom(minPxPerSec);
+    } catch {
+      // Silently ignore if audio not loaded yet
+    }
+  }, [zoomLevel, isReady]);
 
   // Manage loop region separately - only when ready
   useEffect(() => {
