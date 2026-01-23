@@ -106,6 +106,13 @@ const PhantomTimeline = () => {
       }, 150);
     });
 
+    // Listen for redrawcomplete to ensure regions persist after resize
+    wavesurfer.on('redrawcomplete', () => {
+      // Trigger region re-render by forcing isReady update
+      setIsReady(false);
+      setTimeout(() => setIsReady(true), 0);
+    });
+
     return () => {
       if (updateTimeout) {
         clearTimeout(updateTimeout);
