@@ -18,6 +18,7 @@ import {
   Speed,
   VolumeUp,
   SkipPrevious,
+  Loop,
 } from '@mui/icons-material';
 import { useAudioStore } from '../hooks/useAudioStore';
 import PlaybackSpeedDrawer from './PlaybackSpeedDrawer';
@@ -114,7 +115,7 @@ const BottomControlBar = () => {
             aria-label={playbackState.isPlaying ? t('controls.pause') : t('controls.play')}
             onClick={() => (playbackState.isPlaying ? pause() : play())}
           >
-            {playbackState.isPlaying ? <Pause /> : <PlayArrow />}
+            {playbackState.isPlaying ? <Pause /> : (loopRegion.enabled ? <Loop /> : <PlayArrow />)}
           </StyledFab>
         )}
 
