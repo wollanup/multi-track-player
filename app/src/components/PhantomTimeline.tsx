@@ -128,16 +128,16 @@ const PhantomTimeline = () => {
   // Handle zoom separately without recreating wavesurfer
   useEffect(() => {
     if (!wavesurferRef.current || !isReady) return;
-    
+
     const wavesurfer = wavesurferRef.current;
-    
+
     try {
       if (zoomLevel === 1) {
         // Reset to minimal zoom to fit everything
         wavesurfer.zoom(1);
       } else {
-        // Apply custom zoom
-        const minPxPerSec = 50 * zoomLevel;
+        // Double each time: 2, 4, 8, 16, 32...
+        const minPxPerSec = Math.pow(2, zoomLevel - 1);
         wavesurfer.zoom(minPxPerSec);
       }
     } catch {

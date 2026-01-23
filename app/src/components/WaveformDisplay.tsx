@@ -62,7 +62,7 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
     // Style regions when created (read-only regions don't need visible handles)
     regions.on('region-created', (region) => {
       if (!region.element) return;
-      
+
       // For read-only regions, hide the handles completely
       const handles = region.element.querySelectorAll('[part~="region-handle"]');
       handles.forEach((handle: Element) => {
@@ -104,16 +104,16 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
   // Handle zoom separately without recreating wavesurfer
   useEffect(() => {
     if (!wavesurferRef.current || !isReady) return;
-    
+
     const wavesurfer = wavesurferRef.current;
-    
+
     try {
       if (zoomLevel === 1) {
         // Reset to minimal zoom to fit everything
         wavesurfer.zoom(1);
       } else {
-        // Apply custom zoom
-        const minPxPerSec = 50 * zoomLevel;
+        // Double each time: 2, 4, 8, 16, 32...
+        const minPxPerSec = Math.pow(2, zoomLevel - 1);
         wavesurfer.zoom(minPxPerSec);
       }
     } catch {
