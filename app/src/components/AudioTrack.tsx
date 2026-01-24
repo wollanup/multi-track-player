@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
-import { Box, Paper, Typography, IconButton, Slider, Stack, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField, Skeleton } from '@mui/material';
+import { Box, Paper, Typography, IconButton, Slider, Stack, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField } from '@mui/material';
 import {
   VolumeUp,
   VolumeOff,
@@ -140,7 +140,7 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
         p: 2,
         mb: 1.5,
         borderLeft: `4px solid ${track.isMuted ? 'rgba(128, 128, 128, 0.3)' : track.color}`,
-        opacity: track.buffer ? (track.isMuted || isInactive ? 0.5 : 1) : 0.6,
+        opacity: track.isMuted || isInactive ? 0.5 : 1,
         transition: 'opacity 0.2s',
       }}
     >
@@ -192,13 +192,9 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
           </IconButton>
         </Box>
 
-        {/* Waveform - Show skeleton if buffer not loaded */}
+        {/* Waveform */}
         <Box mb={1.5}>
-          {track.buffer ? (
-            <WaveformDisplay track={track} trackId={track.id} />
-          ) : (
-            <Skeleton variant="rectangular" height={60} sx={{ borderRadius: 1 }} />
-          )}
+          <WaveformDisplay track={track} trackId={track.id} />
         </Box>
 
         {/* Controls */}
@@ -207,7 +203,7 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
           {/* Solo */}
           <IconButton
             size="small"
-            disabled={!track.buffer}
+            disabled={false}
             onPointerDown={handleSoloPointerDown}
             onPointerUp={handleSoloPointerUp}
             onPointerCancel={handleSoloPointerUp}
@@ -227,7 +223,7 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
           {/* Mute */}
           <IconButton
             size="small"
-            disabled={!track.buffer}
+            disabled={false}
             onPointerDown={handleMutePointerDown}
             onPointerUp={handleMutePointerUp}
             onPointerCancel={handleMutePointerUp}
@@ -249,7 +245,7 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
               value={localVolume}
               onChange={handleVolumeChange}
               onChangeCommitted={handleVolumeChangeCommitted}
-              disabled={track.isMuted || !track.buffer}
+              disabled={track.isMuted}
               size="small"
               valueLabelDisplay="auto"
               valueLabelFormat={(value) => `${Math.round(value)}%`}

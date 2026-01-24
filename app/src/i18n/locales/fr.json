@@ -46,8 +46,8 @@
     "start": "Début",
     "end": "Fin",
     "set": "Définir",
-    "setStart": "Marquer début de boucle",
-    "setEnd": "Marquer fin de boucle",
+    "setStart": "Marqueur / Début de boucle à ",
+    "setEnd": "Marquer fin de boucle ",
     "waitingForEnd": "En attente de la fin, début à",
     "active": "Active",
     "region": "Région",
@@ -57,7 +57,13 @@
     "tooShort": "La boucle est trop courte (minimum 0.1s)",
     "tooltip": "Définir la limite de boucle à la position de lecture actuelle",
     "startHere": "Début ici",
-    "endHere": "Fin ici"
+    "endHere": "Fin ici",
+    "goToMarker": "Aller au marqueur",
+    "clearMarker": "Effacer le marqueur",
+    "adjustPosition": "Position",
+    "adjustDuration": "Durée",
+    "position": "Position",
+    "duration": "Durée"
   },
   "loading": {
     "tracks": "Chargement des pistes..."

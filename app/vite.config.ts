@@ -1,9 +1,26 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { execSync } from 'child_process'
+
+const getGitInfo = () => {
+  try {
+    const commit = execSync('git rev-parse --short HEAD').toString().trim()
+    const date = execSync('git log -1 --format=%ci').toString().trim()
+    return { commit, date }
+  } catch {
+    return { commit: 'dev', date: new Date().toISOString() }
+  }
+}
+
+const gitInfo = getGitInfo()
 
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    '__APP_VERSION__': JSON.stringify(gitInfo.commit),
+    '__BUILD_DATE__': JSON.stringify(gitInfo.date),
+  },
   plugins: [
     react(),
     VitePWA({
@@ -13,8 +30,8 @@ export default defineConfig({
         name: 'Stemux',
         short_name: 'Stemux',
         description: 'Practice, mix and loop your stems',
-        theme_color: '#1976d2',
-        background_color: '#0a0e27',
+        theme_color: '#4ECDC4',
+        background_color: '#222',
         display: 'standalone',
         orientation: 'any',
         scope: '/stemux/',
@@ -135,7 +152,7 @@ export default defineConfig({
         clientsClaim: true
       },
       devOptions: {
-        enabled: true,
+        enabled: false, // Disable PWA in dev to avoid HMR issues
         type: 'module'
       }
     })
@@ -144,6 +161,9 @@ export default defineConfig({
   server: {
     hmr: {
       overlay: true,
+    },
+    watch: {
+      usePolling: false, // Use native file watching
     },
   },
   optimizeDeps: {
@@ -156,7 +176,6 @@ export default defineConfig({
           'react-vendor': ['react', 'react-dom'],
           'mui-vendor': ['@mui/material', '@mui/icons-material'],
           'i18n-vendor': ['react-i18next', 'i18next'],
-          'audio-vendor': ['zustand'],
         },
       },
     },

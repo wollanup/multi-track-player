@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { AudioStore, AudioTrack } from '../types/audio';
 import { saveAudioFile, deleteAudioFile, getAllAudioFiles } from '../utils/indexedDB';
+import type WaveSurfer from 'wavesurfer.js';
 
 const COLORS = [
   '#4ECDC4','#FFA07A','#BB8FCE', '#F7DC6F',
@@ -80,6 +81,9 @@ const loadMasterVolume = () => {
   return stored ? parseFloat(stored) : 1.0;
 };
 
+// WaveSurfer instances registry (outside Zustand to avoid re-renders)
+const wavesurferInstances = new Map<string, WaveSurfer>();
+
 export const useAudioStore = create<AudioStore>((set, get) => ({
   tracks: [],
   playbackState: {
@@ -93,7 +97,7 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
   masterVolume: loadMasterVolume(),
   audioContext: null,
   showLoopPanel: false,
-  zoomLevel: 1,
+  zoomLevel: 1, // Direct px/sec value
 
   initAudioContext: () => {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -101,7 +105,7 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
   },
 
   addTrack: async (file: File) => {
-    const { tracks, audioContext } = get();
+    const { tracks } = get();
 
     if (tracks.length >= 8) {
       alert('Maximum 8 tracks allowed');
@@ -115,7 +119,6 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
       id,
       name: file.name,
       file,
-      buffer: null,
       volume: 0.8,
       isMuted: false,
       isSolo: false,
@@ -132,22 +135,6 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
     } catch (error) {
       console.error('Failed to save audio file:', error);
     }
-
-    // Decode audio in background
-    if (audioContext) {
-      const arrayBuffer = await file.arrayBuffer();
-      const buffer = await audioContext.decodeAudioData(arrayBuffer);
-
-      set((state) => ({
-        tracks: state.tracks.map((t) =>
-          t.id === id ? { ...t, buffer } : t
-        ),
-        playbackState: {
-          ...state.playbackState,
-          duration: Math.max(state.playbackState.duration, buffer.duration),
-        },
-      }));
-    }
   },
 
   removeTrack: async (id: string) => {
@@ -160,17 +147,8 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
 
     const newTracks = get().tracks.filter((t) => t.id !== id);
 
-    // Recalculate duration from remaining tracks
-    const newDuration = newTracks.reduce((max, track) => {
-      return track.buffer ? Math.max(max, track.buffer.duration) : max;
-    }, 0);
-
     set({
       tracks: newTracks,
-      playbackState: {
-        ...get().playbackState,
-        duration: newDuration,
-      },
     });
     saveTrackSettings(newTracks);
   },
@@ -187,16 +165,45 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
 
   toggleMute: (id: string) => {
     const track = get().tracks.find((t) => t.id === id);
-    if (track) {
-      get().updateTrack(id, { isMuted: !track.isMuted });
+    if (!track) return;
+    
+    const newMutedState = !track.isMuted;
+    get().updateTrack(id, { isMuted: newMutedState });
+    
+    // Update WaveSurfer instance directly
+    const ws = wavesurferInstances.get(id);
+    if (ws) {
+      const allTracks = get().tracks;
+      const hasSoloedTracks = allTracks.some(t => t.isSolo);
+      const shouldBeMuted = newMutedState || (hasSoloedTracks && !track.isSolo);
+      ws.setMuted(shouldBeMuted);
     }
   },
 
   toggleSolo: (id: string) => {
-    const track = get().tracks.find((t) => t.id === id);
-    if (track) {
-      get().updateTrack(id, { isSolo: !track.isSolo });
-    }
+    const tracks = get().tracks;
+    const track = tracks.find((t) => t.id === id);
+    if (!track) return;
+    
+    const newSoloState = !track.isSolo;
+    
+    // Update track state
+    get().updateTrack(id, { isSolo: newSoloState });
+    
+    // Calculate with the NEW state
+    const allTracks = tracks.map(t => 
+      t.id === id ? { ...t, isSolo: newSoloState } : t
+    );
+    const hasSoloedTracks = allTracks.some(t => t.isSolo);
+    
+    // Apply mute to ALL instances
+    allTracks.forEach(t => {
+      const ws = wavesurferInstances.get(t.id);
+      if (ws) {
+        const shouldBeMuted = t.isMuted || (hasSoloedTracks && !t.isSolo);
+        ws.setMuted(shouldBeMuted);
+      }
+    });
   },
 
   exclusiveSolo: (id: string) => {
@@ -206,6 +213,15 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
     }));
     set({ tracks: newTracks });
     saveTrackSettings(newTracks);
+    
+    // Update all WaveSurfer instances - all except 'id' are muted
+    newTracks.forEach(t => {
+      const ws = wavesurferInstances.get(t.id);
+      if (ws) {
+        const shouldBeMuted = t.isMuted || t.id !== id;
+        ws.setMuted(shouldBeMuted);
+      }
+    });
   },
 
   unmuteAll: () => {
@@ -215,28 +231,69 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
     }));
     set({ tracks: newTracks });
     saveTrackSettings(newTracks);
+    
+    // Update all WaveSurfer instances
+    const hasSoloedTracks = newTracks.some(t => t.isSolo);
+    newTracks.forEach(t => {
+      const ws = wavesurferInstances.get(t.id);
+      if (ws) {
+        const shouldBeMuted = hasSoloedTracks && !t.isSolo;
+        ws.setMuted(shouldBeMuted);
+      }
+    });
   },
 
   play: () => {
+    console.log('🎵 PLAY called - instances:', wavesurferInstances.size);
+    
+    // If loop enabled, seek to loop start before playing
+    const { loopRegion } = get();
+    if (loopRegion.enabled && loopRegion.start < loopRegion.end && loopRegion.end > 0) {
+      console.log('🔁 Loop enabled, seeking to start:', loopRegion.start);
+      wavesurferInstances.forEach((ws) => {
+        ws.seekTo(loopRegion.start / ws.getDuration());
+      });
+    }
+    
+    // Call play on all WaveSurfer instances
+    wavesurferInstances.forEach((ws, id) => {
+      console.log('Playing instance:', id);
+      ws.play().catch(err => console.warn('WaveSurfer play error:', err));
+    });
+    
     set((state) => ({
       playbackState: { ...state.playbackState, isPlaying: true },
     }));
   },
 
   pause: () => {
+    // Call pause on all WaveSurfer instances
+    wavesurferInstances.forEach((ws) => {
+      ws.pause();
+    });
+    
     set((state) => ({
       playbackState: { ...state.playbackState, isPlaying: false },
     }));
   },
 
   seek: (time: number) => {
+    // Seek all WaveSurfer instances
+    wavesurferInstances.forEach((ws) => {
+      ws.setTime(time);
+    });
+    
     set((state) => ({
       playbackState: { ...state.playbackState, currentTime: time },
     }));
-    // Position playback no longer saved - always start fresh
   },
 
   setPlaybackRate: (rate: number) => {
+    // Set playback rate on all WaveSurfer instances
+    wavesurferInstances.forEach((ws) => {
+      ws.setPlaybackRate(rate, true); // true = preserve pitch
+    });
+    
     set((state) => ({
       playbackState: { ...state.playbackState, playbackRate: rate },
     }));
@@ -280,11 +337,19 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
   },
 
   zoomIn: () => {
-    set((state) => ({ zoomLevel: Math.min(state.zoomLevel + 1, 20) }));
+    set((state) => ({ 
+      zoomLevel: state.zoomLevel < 10 
+        ? state.zoomLevel + 1 
+        : state.zoomLevel + 10 
+    }));
   },
 
   zoomOut: () => {
-    set((state) => ({ zoomLevel: Math.max(state.zoomLevel - 1, 1) }));
+    set((state) => ({ 
+      zoomLevel: state.zoomLevel > 10 
+        ? state.zoomLevel - 10 
+        : Math.max(state.zoomLevel - 1, 1) 
+    }));
   },
 }));
 
@@ -307,56 +372,36 @@ export const restoreTracks = async () => {
           return {
             ...setting,
             file: storedFile.file,
-            buffer: null,
           };
         }
         return null;
       })
       .filter((t: AudioTrack | null): t is AudioTrack => t !== null);
 
-    // Show tracks immediately (even with null buffers)
+    // Show tracks immediately
     if (restoredTracks.length > 0) {
       useAudioStore.setState({
         tracks: restoredTracks,
       });
     }
-
-    // Decode audio buffers in parallel (in background) - don't await
-    if (restoredTracks.length > 0 && state.audioContext) {
-      // Fire and forget - decode in background
-      Promise.all(
-        restoredTracks.map(async (track) => {
-          try {
-            const arrayBuffer = await track.file.arrayBuffer();
-            const buffer = await state.audioContext!.decodeAudioData(arrayBuffer);
-
-            // Update individual track with buffer
-            useAudioStore.setState((currentState) => ({
-              tracks: currentState.tracks.map((t) =>
-                t.id === track.id ? { ...t, buffer } : t
-              ),
-            }));
-
-            return buffer;
-          } catch (error) {
-            console.error(`Failed to decode track ${track.name}:`, error);
-            return null;
-          }
-        })
-      ).then((buffers) => {
-        const validBuffers = buffers.filter((b): b is AudioBuffer => b !== null);
-
-        if (validBuffers.length > 0) {
-          useAudioStore.setState((currentState) => ({
-            playbackState: {
-              ...currentState.playbackState,
-              duration: Math.max(...validBuffers.map(b => b.duration)),
-            },
-          }));
-        }
-      });
-    }
   } catch (error) {
     console.error('Failed to restore tracks:', error);
   }
+};
+
+// Helper functions to manage WaveSurfer instances
+export const registerWavesurfer = (trackId: string, instance: WaveSurfer) => {
+  wavesurferInstances.set(trackId, instance);
+};
+
+export const unregisterWavesurfer = (trackId: string) => {
+  wavesurferInstances.delete(trackId);
+};
+
+export const getWavesurfer = (trackId: string) => {
+  return wavesurferInstances.get(trackId);
+};
+
+export const getAllWavesurfers = () => {
+  return Array.from(wavesurferInstances.values());
 };

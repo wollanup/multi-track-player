@@ -18,10 +18,10 @@ import {
   MenuItem,
   ListItemIcon,
   ListItemText,
+  Slider, Stack
 } from '@mui/material';
 import { Loop, HelpOutline, ZoomIn, ZoomOut, MoreVert, Refresh } from '@mui/icons-material';
 import { useAudioStore, restoreTracks } from './hooks/useAudioStore';
-import { useAudioEngine } from './hooks/useAudioEngine';
 import FileUploader from './components/FileUploader';
 import AudioTrack from './components/AudioTrack';
 import BottomControlBar from './components/BottomControlBar';
@@ -32,17 +32,59 @@ import { StemuxIcon } from './components/StemuxIcon';
 import HelpModal from './components/HelpModal';
 import { useTranslation } from 'react-i18next';
 
+declare const __APP_VERSION__: string;
+declare const __BUILD_DATE__: string;
+
 function App() {
   const { t } = useTranslation();
-  const { tracks, initAudioContext, showLoopPanel, loopRegion, toggleLoopPanel, zoomIn, zoomOut, zoomLevel } = useAudioStore();
+  const { tracks, initAudioContext, showLoopPanel, loopRegion, toggleLoopPanel, zoomLevel } = useAudioStore();
+
+  // Local slider state (controlled)
+  const [sliderValue, setSliderValue] = useState(0);
+
+  // Zoom change handler - logarithmic scale
+  const handleZoomChange = (newSliderValue: number) => {
+    // Logarithmic: zoom = 1 * 2.74^(sliderValue/20)
+    // This gives: slider 0→1, 20→5, 40→10, 60→50, 80→250, 100→500
+    const zoom = Math.round(Math.pow(2.74, newSliderValue / 20));
+    useAudioStore.setState({ zoomLevel: Math.min(zoom, 500) });
+  };
+
+  // Zoom presets with logarithmic slider positions
+  const ZOOM_PRESETS = [
+    { zoom: 1, slider: 0 },
+    { zoom: 5, slider: 20 },
+    { zoom: 10, slider: 40 },
+    { zoom: 50, slider: 60 },
+    { zoom: 250, slider: 80 },
+    { zoom: 500, slider: 100 },
+  ];
+
+  const zoomIn = () => {
+    const currentIndex = ZOOM_PRESETS.findIndex(preset => preset.zoom >= zoomLevel);
+    if (currentIndex < ZOOM_PRESETS.length - 1) {
+      const nextSlider = ZOOM_PRESETS[currentIndex + 1].slider;
+      setSliderValue(nextSlider);
+      handleZoomChange(nextSlider);
+    }
+  };
+
+  const zoomOut = () => {
+    const currentIndex = ZOOM_PRESETS.findIndex(preset => preset.zoom >= zoomLevel);
+    if (currentIndex > 0) {
+      const prevSlider = ZOOM_PRESETS[currentIndex - 1].slider;
+      setSliderValue(prevSlider);
+      handleZoomChange(prevSlider);
+    }
+  };
   const [isLoadingStorage, setIsLoadingStorage] = useState(true);
   const [helpModalOpen, setHelpModalOpen] = useState(false);
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
-  
+
   // Show phantom timeline if loop panel is open OR if a loop is active
   const hasActiveLoop = loopRegion.enabled && loopRegion.start < loopRegion.end && loopRegion.end > 0;
   const showPhantomTimeline = showLoopPanel || hasActiveLoop;
-  const hasLoadedTracks = tracks.length > 0 && tracks.every((t) => t.buffer !== null);
+  const hasLoadedTracks = tracks.length > 0;
   const hasLoopDefined = loopRegion.start < loopRegion.end && loopRegion.end > 0;
 
   // Detect system theme preference
@@ -132,7 +174,6 @@ function App() {
       }),
     [prefersDarkMode, isLargeScreen, isMediumScreen]
   );
-  useAudioEngine();
 
   useEffect(() => {
     const loadApp = async () => {
@@ -162,25 +203,45 @@ function App() {
               Stemux
             </Typography>
             <Box sx={{ flexGrow: 1 }} />
+
             {/* Zoom controls */}
             <IconButton
               color="inherit"
               onClick={zoomOut}
               disabled={!hasLoadedTracks || zoomLevel <= 1}
               aria-label="Zoom out"
-              sx={{ mr: 1 }}
             >
               <ZoomOut />
             </IconButton>
+
+            <Slider
+              value={sliderValue}
+              onChange={(_, value) => {
+                const newValue = value as number;
+                setSliderValue(newValue);
+                handleZoomChange(newValue);
+              }}
+              min={0}
+              max={100}
+              disabled={!hasLoadedTracks}
+              size="small"
+              sx={{
+                width: 120,
+                mx: 1,
+              }}
+              aria-label="Zoom"
+            />
+
             <IconButton
               color="inherit"
               onClick={zoomIn}
-              disabled={!hasLoadedTracks || zoomLevel >= 20}
+              disabled={!hasLoadedTracks || zoomLevel >= 500}
               aria-label="Zoom in"
               sx={{ mr: 1 }}
             >
               <ZoomIn />
             </IconButton>
+            <Stack gap={2} direction="row" alignItems="center">
             {/* Loop button on the right */}
             <IconButton
               color="inherit"
@@ -188,7 +249,7 @@ function App() {
               disabled={!hasLoadedTracks}
               aria-label={t('controls.loop')}
               sx={{
-                bgcolor: hasLoopDefined 
+                bgcolor: hasLoopDefined
                   ? (loopRegion.enabled ? 'success.main' : 'warning.main')
                   : 'transparent',
                 '&:hover': {
@@ -198,6 +259,7 @@ function App() {
                 },
               }}
             >
+
               <Loop />
             </IconButton>
             {/* Menu button */}
@@ -208,7 +270,7 @@ function App() {
             >
               <MoreVert />
             </IconButton>
-            
+          </Stack>
             {/* Menu */}
             <Menu
               anchorEl={menuAnchorEl}
@@ -247,6 +309,17 @@ function App() {
                 </ListItemIcon>
                 <ListItemText>{t('menu.refresh')}</ListItemText>
               </MenuItem>
+              <MenuItem disabled sx={{ opacity: '0.6 !important' }}>
+                <ListItemText
+                  primary={`${__APP_VERSION__} ${new Date(__BUILD_DATE__).toLocaleString()}`}
+                  slotProps={{
+                    primary: {
+                      variant: 'caption',
+                      color: 'text.secondary'
+                    }
+                  }}
+                />
+              </MenuItem>
             </Menu>
           </Toolbar>
         </AppBar>
@@ -255,7 +328,7 @@ function App() {
         <HelpModal open={helpModalOpen} onClose={() => setHelpModalOpen(false)} />
 
         {/* Main content */}
-        <Container maxWidth="lg" sx={{ pt: 10, pb: 10, flex: 1 }}>
+        <Container maxWidth="xl" sx={{ pt: 10, pb: 10, flex: 1 }}>
           {/* Track list or empty state */}
           {isLoadingStorage ? (
             <Box
@@ -294,10 +367,10 @@ function App() {
             <Box>
               {/* Loop Panel - shown above tracks when active */}
               <Slide direction="down" in={showPhantomTimeline} mountOnEnter unmountOnExit>
-                <Paper 
-                  elevation={2} 
-                  sx={{ 
-                    p: 2, 
+                <Paper
+                  elevation={2}
+                  sx={{
+                    p: 2,
                     mb: 2,
                     bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50',
                   }}

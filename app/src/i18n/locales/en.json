@@ -46,8 +46,8 @@
     "start": "Start",
     "end": "End",
     "set": "Set",
-    "setStart": "Mark Loop Start",
-    "setEnd": "Mark Loop End",
+    "setStart": "Mark Loop Start at ",
+    "setEnd": "Mark Loop End at ",
     "waitingForEnd": "Waiting for end, started at",
     "active": "Active",
     "region": "Region",
@@ -57,7 +57,13 @@
     "tooShort": "Loop is too short (minimum 0.1s)",
     "tooltip": "Set loop boundary at current playback position",
     "startHere": "Start Here",
-    "endHere": "End Here"
+    "endHere": "End Here",
+    "goToMarker": "Go to marker",
+    "clearMarker": "Clear marker",
+    "adjustPosition": "Position",
+    "adjustDuration": "Duration",
+    "position": "Position",
+    "duration": "Duration"
   },
   "loading": {
     "tracks": "Loading tracks..."

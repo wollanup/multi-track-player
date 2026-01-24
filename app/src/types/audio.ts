@@ -2,7 +2,6 @@ export interface AudioTrack {
   id: string;
   name: string;
   file: File;
-  buffer: AudioBuffer | null;
   volume: number; // 0-1
   isMuted: boolean;
   isSolo: boolean;

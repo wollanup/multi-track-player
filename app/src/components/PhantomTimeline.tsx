@@ -3,6 +3,7 @@ import { Box, useTheme } from '@mui/material';
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js';
 import { useAudioStore } from '../hooks/useAudioStore';
+import { usePlaybackTime } from '../hooks/usePlaybackTime';
 
 const PhantomTimeline = () => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -12,7 +13,9 @@ const PhantomTimeline = () => {
   const [isReady, setIsReady] = useState(false);
 
   const theme = useTheme();
-  const { playbackState, seek, loopRegion, setLoopRegion, zoomLevel } = useAudioStore();
+  const { playbackState, seek, loopRegion, setLoopRegion } = useAudioStore();
+  const currentTime = usePlaybackTime(); // Use lightweight time tracker
+  // Note: zoomLevel removed - phantom timeline stays at fixed zoom
 
   // Create wavesurfer instance
   useEffect(() => {
@@ -70,14 +73,10 @@ const PhantomTimeline = () => {
       }
     });
 
-    // Create empty buffer with duration of longest track
-    const emptyBuffer = new AudioBuffer({
-      length: Math.ceil(playbackState.duration * 44100),
-      sampleRate: 44100,
-      numberOfChannels: 1,
-    });
-
-    wavesurfer.load('', [emptyBuffer.getChannelData(0)], emptyBuffer.duration);
+    // Load empty waveform with just duration (no actual audio needed)
+    const duration = playbackState.duration || 1;
+    const peaks = [new Float32Array(Math.ceil(duration * 10))]; // Minimal peaks data
+    wavesurfer.load('', peaks, duration);
 
     // Mark as ready when waveform is loaded
     wavesurfer.on('ready', () => {
@@ -126,24 +125,19 @@ const PhantomTimeline = () => {
   }, [playbackState.duration, seek, theme, setLoopRegion]);
 
   // Handle zoom separately without recreating wavesurfer
+  // DISABLED: Keep phantom timeline at fixed zoom to avoid scroll issues on mobile
   useEffect(() => {
     if (!wavesurferRef.current || !isReady) return;
 
     const wavesurfer = wavesurferRef.current;
 
     try {
-      if (zoomLevel === 1) {
-        // Reset to minimal zoom to fit everything
-        wavesurfer.zoom(1);
-      } else {
-        // Double each time: 2, 4, 8, 16, 32...
-        const minPxPerSec = Math.pow(2, zoomLevel - 1);
-        wavesurfer.zoom(minPxPerSec);
-      }
+      // Always keep at zoom level 1 (fit all content)
+      wavesurfer.zoom(1);
     } catch {
       // Silently ignore if audio not loaded yet
     }
-  }, [zoomLevel, isReady]);
+  }, [isReady]); // Removed zoomLevel dependency
 
   // Manage loop region separately - only when ready
   useEffect(() => {
@@ -165,6 +159,12 @@ const PhantomTimeline = () => {
         color: theme.palette.warning.main,
       });
       loopRegionRef.current = marker;
+      
+      // Allow clicking on marker to seek to that position
+      marker.on('click', () => {
+        console.log('⏱ Marker clicked, seeking to:', loopRegion.loopStartMarker);
+        seek(loopRegion.loopStartMarker);
+      });
     }
     // Create new region if valid
     else if (hasValidLoop) {
@@ -182,18 +182,12 @@ const PhantomTimeline = () => {
   }, [isReady, loopRegion.start, loopRegion.end, loopRegion.enabled, loopRegion.isSettingLoop, loopRegion.loopStartMarker, playbackState.duration, theme]);
 
   // Update cursor position
-  const lastUpdateTimeRef = useRef(0);
   useEffect(() => {
     if (wavesurferRef.current && playbackState.duration > 0) {
-      const now = Date.now();
-      // Throttle to ~30fps max (but always update on duration change = buffer loaded)
-      if (now - lastUpdateTimeRef.current > 33 || lastUpdateTimeRef.current === 0) {
-        const progress = playbackState.currentTime / playbackState.duration;
-        wavesurferRef.current.seekTo(progress);
-        lastUpdateTimeRef.current = now;
-      }
+      const progress = currentTime / playbackState.duration;
+      wavesurferRef.current.seekTo(progress);
     }
-  }, [playbackState.currentTime, playbackState.duration]);
+  }, [currentTime, playbackState.duration]);
 
   // Update loop region color when enabled state changes
   useEffect(() => {

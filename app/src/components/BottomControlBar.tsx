@@ -94,7 +94,7 @@ const BottomControlBar = () => {
     }
   };
 
-  const hasLoadedTracks = tracks.length > 0 && tracks.every((t) => t.buffer !== null);
+  const hasLoadedTracks = tracks.length > 0 && tracks.every((t) => t.file !== null);
 
   return (
     <AppBar
@@ -146,11 +146,11 @@ const BottomControlBar = () => {
 
         {/* Master Volume - Desktop: inline slider, Mobile: popover */}
         {/* Desktop version (md and up) */}
-        <Stack 
-          direction="row" 
-          spacing={1} 
-          alignItems="center" 
-          sx={{ 
+        <Stack
+          direction="row"
+          spacing={1}
+          alignItems="center"
+          sx={{
             minWidth: 200,
             display: { xs: 'none', md: 'flex' }
           }}
@@ -228,6 +228,7 @@ const BottomControlBar = () => {
           disabled={!hasLoadedTracks}
           variant="outlined"
           size="small"
+          color="inherit"
           sx={{ minWidth: 100, textTransform: 'none' }}
         >
           {playbackState.playbackRate.toFixed(2)}x
