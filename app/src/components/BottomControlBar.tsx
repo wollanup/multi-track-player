@@ -285,6 +285,7 @@ const BottomControlBar = () => {
             }}
             disabled={!hasLoadedTracks}
             size="small"
+            color="secondary"
             valueLabelDisplay="auto"
             valueLabelFormat={(value) => `${Math.round(value)}%`}
             sx={{ flex: 1 }}
@@ -332,6 +333,7 @@ const BottomControlBar = () => {
                   setMasterVolume((value as number) / 100);
                 }}
                 size="small"
+                color="secondary"
                 valueLabelDisplay="auto"
                 valueLabelFormat={(value) => `${Math.round(value)}%`}
                 sx={{ flex: 1 }}
@@ -347,7 +349,7 @@ const BottomControlBar = () => {
           disabled={!hasLoadedTracks}
           variant="outlined"
           size="small"
-          color="inherit"
+          color="secondary"
           sx={{ minWidth: 100, textTransform: 'none' }}
         >
           {playbackState.playbackRate.toFixed(2)}x

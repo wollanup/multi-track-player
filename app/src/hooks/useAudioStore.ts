@@ -107,6 +107,56 @@ const saveWaveformNormalize = (normalize: boolean) => {
   localStorage.setItem('waveform-normalize', normalize.toString());
 };
 
+// Waveform timeline preference
+const loadWaveformTimeline = () => {
+  const stored = localStorage.getItem('waveform-timeline');
+  return stored ? stored === 'true' : false;
+};
+
+const saveWaveformTimeline = (timeline: boolean) => {
+  localStorage.setItem('waveform-timeline', timeline.toString());
+};
+
+// Waveform minimap preference
+const loadWaveformMinimap = () => {
+  const stored = localStorage.getItem('waveform-minimap');
+  return stored ? stored === 'true' : false;
+};
+
+const saveWaveformMinimap = (minimap: boolean) => {
+  localStorage.setItem('waveform-minimap', minimap.toString());
+};
+
+// Save loop v2 state (markers + loops) to localStorage
+const saveLoopV2State = (markers: any[], loops: any[], activeLoopId: string | null) => {
+  const state = {
+    markers,
+    loops,
+    activeLoopId,
+  };
+  localStorage.setItem('practice-tracks-loop-v2', JSON.stringify(state));
+};
+
+// Load loop v2 state from localStorage
+const loadLoopV2State = () => {
+  const stored = localStorage.getItem('practice-tracks-loop-v2');
+  if (stored) {
+    try {
+      return JSON.parse(stored);
+    } catch (e) {
+      console.warn('⚠️ Failed to parse loop v2 state:', e);
+    }
+  }
+  return {
+    markers: [],
+    loops: [],
+    activeLoopId: null,
+  };
+};
+
+export // Global flag to prevent feedback loops during sync
+let isSynchronizing = false;
+
 export const useAudioStore = create<AudioStore>((set, get) => ({
   tracks: [],
   playbackState: {
@@ -116,6 +166,10 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
     playbackRate: loadPlaybackRate(),
   },
   loopRegion: loadLoopRegion(),
+  loopState: {
+    ...loadLoopV2State(),
+    editMode: false, // Always start in standard mode
+  },
   activeLoopTrackId: loadActiveLoopTrackId(),
   masterVolume: loadMasterVolume(),
   audioContext: null,
@@ -123,6 +177,8 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
   zoomLevel: 0, // Direct px/sec value - 0 means fit to width without scrolling
   waveformStyle: loadWaveformStyle() as 'modern' | 'classic',
   waveformNormalize: loadWaveformNormalize(),
+  waveformTimeline: loadWaveformTimeline(),
+  waveformMinimap: loadWaveformMinimap(),
 
   initAudioContext: () => {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -333,10 +389,47 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
   },
 
   seek: (time: number) => {
+    const state = get();
+    const preserveLoop = state._preserveLoopOnNextSeek || false;
+    
+    // Check if seeking inside the active loop (if any)
+    let seekingInsideActiveLoop = false;
+    if (!preserveLoop && state.loopState.activeLoopId) {
+      const activeLoop = state.loopState.loops.find(l => l.id === state.loopState.activeLoopId);
+      if (activeLoop) {
+        const startMarker = state.loopState.markers.find(m => m.id === activeLoop.startMarkerId);
+        const endMarker = state.loopState.markers.find(m => m.id === activeLoop.endMarkerId);
+        if (startMarker && endMarker) {
+          seekingInsideActiveLoop = time >= startMarker.time && time <= endMarker.time;
+        }
+      }
+    }
+    
     // Update state first
-    set((state) => ({
-      playbackState: { ...state.playbackState, currentTime: time },
-    }));
+    set((state) => {
+      const updates: any = {
+        playbackState: { ...state.playbackState, currentTime: time },
+        _preserveLoopOnNextSeek: false, // Reset flag
+      };
+      
+      // Disable active loop only if seeking outside of it
+      if (!preserveLoop && !seekingInsideActiveLoop && state.loopState.activeLoopId) {
+        console.log('🔓 Disabling loop (seeking outside loop)');
+        updates.loopState = {
+          ...state.loopState,
+          activeLoopId: null,
+          loops: state.loopState.loops.map(l => ({ ...l, enabled: false }))
+        };
+        saveLoopV2State(updates.loopState.markers, updates.loopState.loops, null);
+      } else if (seekingInsideActiveLoop) {
+        console.log('✅ Keeping loop active (seeking inside loop)');
+      }
+      
+      return updates;
+    });
+
+    // Set global flag to prevent feedback loops
+    isSynchronizing = true;
 
     // Seek all WaveSurfer instances synchronously (no await)
     // Use Array.from to avoid iterator issues
@@ -346,6 +439,11 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
     instances.forEach((ws) => {
       ws.setTime(time);
     });
+
+    // Reset flag after a short delay
+    setTimeout(() => {
+      isSynchronizing = false;
+    }, 50);
   },
 
   setPlaybackRate: (rate: number) => {
@@ -396,6 +494,238 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
     set((state) => ({ showLoopPanel: !state.showLoopPanel }));
   },
 
+  // Loop v2 actions
+  toggleLoopEditMode: () => {
+    set((state) => {
+      const newEditMode = !state.loopState.editMode;
+      console.log('🎯 Loop edit mode:', newEditMode ? 'ON' : 'OFF');
+      return {
+        loopState: {
+          ...state.loopState,
+          editMode: newEditMode,
+        },
+      };
+    });
+  },
+
+  addMarker: (time: number, label?: string) => {
+    const { loopState, playbackState } = get();
+    
+    // Limit markers
+    if (loopState.markers.length >= 20) {
+      console.warn('⚠️ Maximum 20 markers reached');
+      return '';
+    }
+
+    const id = `marker-${Date.now()}-${Math.random()}`;
+    const newMarker: import('../types/audio').Marker = {
+      id,
+      time: Math.max(0, Math.min(time, playbackState.duration)),
+      createdAt: Date.now(),
+      label,
+    };
+
+    const newMarkers = [...loopState.markers, newMarker]
+      .sort((a, b) => a.time - b.time);
+
+    console.log(`📍 Created marker #${newMarkers.length} at ${newMarker.time.toFixed(2)}s`);
+
+    const newLoopState = {
+      ...loopState,
+      markers: newMarkers,
+    };
+
+    set({ loopState: newLoopState });
+
+    // Save to localStorage
+    saveLoopV2State(newLoopState.markers, newLoopState.loops, newLoopState.activeLoopId);
+
+    return id;
+  },
+
+  removeMarker: (id: string) => {
+    const { loopState } = get();
+    
+    // Remove loops using this marker
+    const loopsToRemove = loopState.loops.filter(
+      loop => loop.startMarkerId === id || loop.endMarkerId === id
+    );
+
+    loopsToRemove.forEach(loop => {
+      console.log(`🗑️ Removing loop ${loop.id} (uses deleted marker)`);
+    });
+
+    const newMarkers = loopState.markers.filter(m => m.id !== id);
+    const newLoops = loopState.loops.filter(
+      loop => loop.startMarkerId !== id && loop.endMarkerId !== id
+    );
+
+    console.log(`📍 Removed marker ${id}`);
+
+    const newLoopState = {
+      ...loopState,
+      markers: newMarkers,
+      loops: newLoops,
+      activeLoopId: loopsToRemove.some(l => l.id === loopState.activeLoopId)
+        ? null
+        : loopState.activeLoopId,
+    };
+
+    set({ loopState: newLoopState });
+
+    // Save to localStorage
+    saveLoopV2State(newLoopState.markers, newLoopState.loops, newLoopState.activeLoopId);
+  },
+
+  updateMarkerTime: (id: string, time: number) => {
+    const { loopState, playbackState } = get();
+    const newMarkers = loopState.markers.map(m =>
+      m.id === id
+        ? { ...m, time: Math.max(0, Math.min(time, playbackState.duration)) }
+        : m
+    ).sort((a, b) => a.time - b.time);
+
+    console.log(`📍 Updated marker ${id} to ${time.toFixed(2)}s`);
+
+    const newLoopState = {
+      ...loopState,
+      markers: newMarkers,
+    };
+
+    set({ loopState: newLoopState });
+
+    // Save to localStorage
+    saveLoopV2State(newLoopState.markers, newLoopState.loops, newLoopState.activeLoopId);
+  },
+
+  createLoop: (startMarkerId: string, endMarkerId: string) => {
+    const { loopState } = get();
+
+    // Limit loops
+    if (loopState.loops.length >= 10) {
+      console.warn('⚠️ Maximum 10 loops reached');
+      return '';
+    }
+
+    const startMarker = loopState.markers.find(m => m.id === startMarkerId);
+    const endMarker = loopState.markers.find(m => m.id === endMarkerId);
+
+    if (!startMarker || !endMarker) {
+      console.error('❌ Invalid marker IDs');
+      return '';
+    }
+
+    // Ensure start < end
+    const [start, end] = startMarker.time < endMarker.time
+      ? [startMarkerId, endMarkerId]
+      : [endMarkerId, startMarkerId];
+
+    const id = `loop-${Date.now()}-${Math.random()}`;
+    const newLoop: import('../types/audio').Loop = {
+      id,
+      startMarkerId: start,
+      endMarkerId: end,
+      enabled: false,
+      createdAt: Date.now(),
+    };
+
+    console.log(`🔁 Created loop ${id} from ${startMarker.time.toFixed(2)}s to ${endMarker.time.toFixed(2)}s`);
+
+    const newLoopState = {
+      ...loopState,
+      loops: [...loopState.loops, newLoop],
+    };
+
+    set({ loopState: newLoopState });
+
+    // Save to localStorage
+    saveLoopV2State(newLoopState.markers, newLoopState.loops, newLoopState.activeLoopId);
+
+    return id;
+  },
+
+  removeLoop: (id: string) => {
+    const { loopState } = get();
+    const newLoops = loopState.loops.filter(l => l.id !== id);
+
+    console.log(`🗑️ Removed loop ${id}`);
+
+    const newLoopState = {
+      ...loopState,
+      loops: newLoops,
+      activeLoopId: loopState.activeLoopId === id ? null : loopState.activeLoopId,
+    };
+
+    set({ loopState: newLoopState });
+
+    // Save to localStorage
+    saveLoopV2State(newLoopState.markers, newLoopState.loops, newLoopState.activeLoopId);
+  },
+
+  toggleLoopById: (id: string) => {
+    const { loopState, seek } = get();
+    const loop = loopState.loops.find(l => l.id === id);
+
+    if (!loop) return;
+
+    const newEnabled = !loop.enabled;
+
+    // Disable all other loops if enabling this one
+    const newLoops = loopState.loops.map(l =>
+      l.id === id
+        ? { ...l, enabled: newEnabled }
+        : { ...l, enabled: false }
+    );
+
+    console.log(`🔁 Loop ${id} ${newEnabled ? 'ENABLED' : 'DISABLED'}`);
+
+    const newLoopState = {
+      ...loopState,
+      loops: newLoops,
+      activeLoopId: newEnabled ? id : null,
+    };
+
+    set({ loopState: newLoopState });
+
+    // Save to localStorage
+    saveLoopV2State(newLoopState.markers, newLoopState.loops, newLoopState.activeLoopId);
+
+    // If enabling, seek to the start of the loop
+    if (newEnabled) {
+      const startMarker = loopState.markers.find(m => m.id === loop.startMarkerId);
+      if (startMarker) {
+        console.log(`⏩ Seeking to loop start: ${startMarker.time.toFixed(2)}s`);
+        seek(startMarker.time);
+      }
+    }
+  },
+
+  setActiveLoop: (id: string | null) => {
+    const { loopState } = get();
+
+    const newLoops = loopState.loops.map(l => ({
+      ...l,
+      enabled: l.id === id,
+    }));
+
+    console.log(`🔁 Active loop set to: ${id || 'NONE'}`);
+
+    const newLoopState = {
+      ...loopState,
+      loops: newLoops,
+      activeLoopId: id,
+    };
+
+    set({ 
+      loopState: newLoopState,
+      // Set a flag to preserve loop on next seek (for loop zone clicks)
+      _preserveLoopOnNextSeek: id !== null,
+    });
+
+    // Save to localStorage
+    saveLoopV2State(newLoopState.markers, newLoopState.loops, newLoopState.activeLoopId);
+  },
+
   setWaveformStyle: (style: 'modern' | 'classic') => {
     set({ waveformStyle: style });
     saveWaveformStyle(style);
@@ -420,6 +750,16 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
         ? state.zoomLevel - 10
         : Math.max(state.zoomLevel - 1, 1)
     }));
+  },
+
+  setWaveformTimeline: (timeline: boolean) => {
+    set({ waveformTimeline: timeline });
+    saveWaveformTimeline(timeline);
+  },
+
+  setWaveformMinimap: (minimap: boolean) => {
+    set({ waveformMinimap: minimap });
+    saveWaveformMinimap(minimap);
   },
 }));
 
@@ -496,3 +836,6 @@ export const getWavesurfer = (trackId: string) => {
 export const getAllWavesurfers = () => {
   return Array.from(wavesurferInstances.values());
 };
+
+// Export function to check if currently synchronizing
+export const getIsSynchronizing = () => isSynchronizing;

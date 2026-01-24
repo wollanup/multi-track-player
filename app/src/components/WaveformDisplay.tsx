@@ -1,11 +1,13 @@
-import { useEffect, useRef, useState, memo } from 'react';
-import { Box, useTheme } from '@mui/material';
+import {memo, useEffect, useRef, useState} from 'react';
+import {Box, useTheme} from '@mui/material';
 import WaveSurfer from 'wavesurfer.js';
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js';
-import type { AudioTrack } from '../types/audio';
-import { useAudioStore, registerWavesurfer, unregisterWavesurfer, markTrackFinished } from '../hooks/useAudioStore';
-
-import { setPlaybackTime } from '../hooks/usePlaybackTime';
+import TimelinePlugin from 'wavesurfer.js/dist/plugins/timeline.esm.js';
+import Minimap from 'wavesurfer.js/dist/plugins/minimap.esm.js';
+import type {AudioTrack} from '../types/audio';
+import {markTrackFinished, registerWavesurfer, unregisterWavesurfer, useAudioStore} from '../hooks/useAudioStore';
+import {setPlaybackTime} from '../hooks/usePlaybackTime';
+import {getWaveSurferElement, injectMarkersAndLoops, setupEditModeInteractions} from '../utils/shadowDomLoopRenderer';
 
 interface WaveformDisplayProps {
   track: AudioTrack;
@@ -18,6 +20,7 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
   const regionsPluginRef = useRef<any>(null);
   const loopRegionRef = useRef<any>(null);
   const [isReady, setIsReady] = useState(false);
+  const isDraggingRef = useRef(false);
 
   const theme = useTheme();
   const {
@@ -28,6 +31,9 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
     masterVolume,
     waveformStyle,
     waveformNormalize,
+    waveformTimeline,
+    waveformMinimap,
+    loopState,
   } = useAudioStore();
 
   // Use ref to avoid recreating WaveSurfer when seek changes
@@ -42,16 +48,36 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
     const waveColor = track.color;
     const progressColor = track.color + '80'; // Add 50% opacity
 
-    // Create regions plugin instance
+    // Create plugins array
+    const plugins = [];
+    
+    // Always add regions plugin
     const regions = RegionsPlugin.create();
     regionsPluginRef.current = regions;
+    plugins.push(regions);
+    
+    // Add timeline if enabled
+    if (waveformTimeline) {
+      plugins.push(TimelinePlugin.create());
+    }
+    
+    // Add minimap if enabled
+    let minimapInstance = null;
+    if (waveformMinimap) {
+      minimapInstance = Minimap.create({
+        height: 20,
+        waveColor: theme.palette.grey[400],
+        progressColor: theme.palette.grey[600],
+      });
+      plugins.push(minimapInstance);
+    }
 
     const wavesurfer = WaveSurfer.create({
       container: containerRef.current,
       waveColor,
       progressColor,
-      cursorColor: theme.palette.text.primary,
-      cursorWidth: 2,
+      cursorColor: theme.palette.primary.light,
+      cursorWidth: 4,
       ...(waveformStyle === 'modern' ? {
         barWidth: 5,
         barGap: 3,
@@ -64,7 +90,7 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
       autoCenter: true,
       dragToSeek: false, // Disable built-in to avoid double-seek
       // hideScrollbar: true,
-      plugins: [regions],
+      plugins,
     });
 
     wavesurferRef.current = wavesurfer;
@@ -94,11 +120,28 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
         // Update lightweight time tracker (doesn't trigger Zustand store re-renders!)
         setPlaybackTime(currentTime);
 
-        // Check if we've passed the loop end point
-        const { loopRegion } = useAudioStore.getState();
-        if (loopRegion.enabled && loopRegion.start < loopRegion.end && currentTime >= loopRegion.end) {
-          console.log('🔁 Loop end reached, seeking back to:', loopRegion.start);
-          seek(loopRegion.start);
+        // Check Loop v2 first
+        const { loopState } = useAudioStore.getState();
+
+        if (loopState.activeLoopId) {
+          const activeLoop = loopState.loops.find(l => l.id === loopState.activeLoopId);
+
+          if (activeLoop && activeLoop.enabled) {
+            const startMarker = loopState.markers.find(m => m.id === activeLoop.startMarkerId);
+            const endMarker = loopState.markers.find(m => m.id === activeLoop.endMarkerId);
+
+            if (startMarker && endMarker && currentTime >= endMarker.time) {
+              console.log(`🔁 Loop v2 end reached (${endMarker.time.toFixed(2)}s), seeking back to ${startMarker.time.toFixed(2)}s`);
+              seekRef.current(startMarker.time);
+            }
+          }
+        } else {
+          // Fallback to old loop system
+          const { loopRegion } = useAudioStore.getState();
+          if (loopRegion.enabled && loopRegion.start < loopRegion.end && currentTime >= loopRegion.end) {
+            console.log('🔁 Loop end reached, seeking back to:', loopRegion.start);
+            seekRef.current(loopRegion.start);
+          }
         }
 
         lastTimeUpdate = now;
@@ -127,6 +170,21 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
         }));
       }
 
+      // Find Shadow DOM and inject markers/loops
+      const wsElement = getWaveSurferElement(containerRef);
+      
+      if (wsElement && wsElement.shadowRoot) {
+        const wrapper = wsElement.shadowRoot.querySelector('.wrapper') as HTMLElement;
+        
+        if (wrapper) {
+          // Inject markers and loops using external module
+          injectMarkersAndLoops(wsElement, loopState, playbackState, theme);
+
+          // Add interaction layer for edit mode using external module
+          setupEditModeInteractions(wrapper, wsElement, loopState, playbackState, isDraggingRef, theme);
+        }
+      }
+
       // Set initial state from track data
       const allTracks = useAudioStore.getState().tracks;
       const hasSoloedTracks = allTracks.some(t => t.isSolo);
@@ -137,12 +195,45 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
       wavesurfer.setPlaybackRate(useAudioStore.getState().playbackState.playbackRate, true);
     });
 
-    // Simple click handler - just seek
+    // Simple click handler - seek only if not in loop edit mode
     wavesurfer.on('click', (progress) => {
+      const { loopState, setActiveLoop } = useAudioStore.getState();
+      
+      // Don't seek if in edit mode (handled by LoopEditorOverlay)
+      if (loopState.editMode) {
+        console.log('🚫 Click ignored (edit mode active)');
+        return;
+      }
+
+      // Clicking on waveform always disables any active loop
+      if (loopState.activeLoopId) {
+        console.log('🔓 Disabling loop on waveform click');
+        setActiveLoop(null);
+      }
+
       const duration = wavesurfer.getDuration();
       const time = progress * duration;
       seekRef.current(time); // Use ref to avoid dependency
     });
+
+    // Sync minimap clicks to other tracks
+    if (minimapInstance) {
+      minimapInstance.on('click', () => {
+        const { loopState, setActiveLoop } = useAudioStore.getState();
+        
+        // The minimap already updated its own track automatically
+        // We just need to sync to OTHER tracks
+        const newTime = wavesurfer.getCurrentTime();
+        
+        // Disable active loop when seeking
+        if (loopState.activeLoopId) {
+          setActiveLoop(null);
+        }
+        
+        // Sync all tracks (including this one, but it's already at the right position)
+        seek(newTime);
+      });
+    }
 
     // Listen for redrawcomplete to ensure regions persist after resize
     wavesurfer.on('redrawcomplete', () => {
@@ -159,7 +250,7 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
       loopRegionRef.current = null;
       wavesurfer.destroy();
     };
-  }, [track.file, track.id, waveformStyle, waveformNormalize]); // Recreate when settings change
+  }, [track.file, track.id, waveformStyle, waveformNormalize, waveformTimeline, waveformMinimap]); // Recreate when settings change
 
   // Handle zoom separately without recreating wavesurfer
   useEffect(() => {
@@ -206,6 +297,27 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
     wavesurferRef.current.setOptions({ waveColor, progressColor });
   }, [track.isMuted, track.color, theme, isReady]);
 
+  // Re-inject markers/loops when they change (but NOT during drag)
+  useEffect(() => {
+    if (!isReady) return;
+    if (isDraggingRef.current) {
+      console.log('⏭️ Skipping re-injection during drag');
+      return; // Don't re-inject while dragging
+    }
+    
+    const wsElement = getWaveSurferElement(containerRef);
+    if (!wsElement) return;
+
+    const wrapper = wsElement.shadowRoot?.querySelector('.wrapper') as HTMLElement;
+    if (!wrapper) return;
+
+    // Skip re-injection during drag to avoid interrupting the drag operation
+    if (isDraggingRef.current) return;
+
+    injectMarkersAndLoops(wsElement, loopState, playbackState, theme);
+    setupEditModeInteractions(wrapper, wsElement, loopState, playbackState, isDraggingRef, theme);
+  }, [isReady, loopState.markers, loopState.loops, loopState.editMode, playbackState.duration, playbackState.isPlaying, theme]);
+
   // Update volume when it changes (NOT mute - that's handled in store)
   useEffect(() => {
     if (!wavesurferRef.current) return;
@@ -218,6 +330,21 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
     if (!wavesurferRef.current || !isReady) return;
     wavesurferRef.current.setPlaybackRate(playbackState.playbackRate, true);
   }, [playbackState.playbackRate, isReady]);
+
+  // Update cursor color when theme changes
+  useEffect(() => {
+    if (!wavesurferRef.current || !isReady) return;
+    wavesurferRef.current.setOptions({ cursorColor: theme.palette.primary.light });
+  }, [theme.palette.secondary.main, isReady]);
+
+  // Toggle WaveSurfer interact option based on edit mode
+  useEffect(() => {
+    if (!wavesurferRef.current || !isReady) return;
+    
+    const interact = !loopState.editMode; // Disable interact in edit mode
+    console.log(`🎛️ WaveSurfer interact: ${interact} (editMode: ${loopState.editMode})`);
+    wavesurferRef.current.setOptions({ interact });
+  }, [loopState.editMode, isReady]);
 
 
   return (

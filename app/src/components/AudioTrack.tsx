@@ -1,16 +1,24 @@
-import { useRef, useState, useEffect } from 'react';
-import { Box, Paper, Typography, IconButton, Slider, Stack, Button, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, TextField } from '@mui/material';
+import {useEffect, useRef, useState} from 'react';
 import {
-  VolumeUp,
-  VolumeOff,
-  Headset,
-  Close,
-  Edit,
-} from '@mui/icons-material';
-import { useTranslation } from 'react-i18next';
-import { useAudioStore } from '../hooks/useAudioStore';
+  Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  IconButton,
+  Paper,
+  Slider,
+  Stack,
+  TextField,
+  Typography
+} from '@mui/material';
+import {Close, Edit, Headset, VolumeOff, VolumeUp,} from '@mui/icons-material';
+import {useTranslation} from 'react-i18next';
+import {useAudioStore} from '../hooks/useAudioStore';
 import WaveformDisplay from './WaveformDisplay';
-import type { AudioTrack as AudioTrackType } from '../types/audio';
+import type {AudioTrack as AudioTrackType} from '../types/audio';
 
 interface AudioTrackProps {
   track: AudioTrackType;
@@ -27,6 +35,7 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
     removeTrack,
     tracks,
     updateTrack,
+    loopState,
   } = useAudioStore();
   
   // Check if any track has solo enabled
@@ -38,10 +47,15 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
   const [editedName, setEditedName] = useState(track.name);
   const [localVolume, setLocalVolume] = useState(track.volume * 100);
 
+  // Ref for waveform container (for overlay positioning)
+  const waveformContainerRef = useRef<HTMLDivElement>(null);
+
   // Sync local volume with track volume when it changes externally
   useEffect(() => {
-    setLocalVolume(track.volume * 100);
-  }, [track.volume]);
+    if (Math.abs(track.volume * 100 - localVolume) > 1) {
+      setLocalVolume(track.volume * 100);
+    }
+  }, [track.volume]); // Removed localVolume from deps to avoid cascade
   
   // Delete confirmation dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -140,8 +154,10 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
         p: 2,
         mb: 1.5,
         borderLeft: `4px solid ${track.isMuted ? 'rgba(128, 128, 128, 0.3)' : track.color}`,
+        border: loopState.editMode ? '1px solid' : undefined,
+        borderColor: loopState.editMode ? 'warning.main' : undefined,
         opacity: track.isMuted || isInactive ? 0.5 : 1,
-        transition: 'opacity 0.2s',
+        transition: 'opacity 0.2s, border 0.2s ease-in-out',
       }}
     >
       <Stack spacing={0}>
@@ -193,8 +209,11 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
         </Box>
 
         {/* Waveform */}
-        <Box mb={1.5}>
+        <Box mb={1.5} ref={waveformContainerRef} sx={{ position: 'relative' }}>
           <WaveformDisplay track={track} trackId={track.id} />
+          
+          {/* Loop editor overlay - DISABLED for Shadow DOM testing */}
+          {/* <LoopEditorOverlay containerRef={waveformContainerRef} /> */}
         </Box>
 
         {/* Controls */}

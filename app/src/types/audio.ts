@@ -23,10 +23,34 @@ export interface LoopRegion {
   loopStartMarker: number;
 }
 
+// Loop v2 types
+export interface Marker {
+  id: string;
+  time: number;
+  createdAt: number;
+  label?: string;
+}
+
+export interface Loop {
+  id: string;
+  startMarkerId: string;
+  endMarkerId: string;
+  enabled: boolean;
+  createdAt: number;
+}
+
+export interface LoopState {
+  markers: Marker[];
+  loops: Loop[];
+  activeLoopId: string | null;
+  editMode: boolean;
+}
+
 export interface AudioStore {
   tracks: AudioTrack[];
   playbackState: PlaybackState;
   loopRegion: LoopRegion;
+  loopState: LoopState; // Loop v2
   activeLoopTrackId: string | null;
   audioContext: AudioContext | null;
   masterVolume: number; // 0-1
@@ -34,6 +58,9 @@ export interface AudioStore {
   zoomLevel: number;
   waveformStyle: 'modern' | 'classic';
   waveformNormalize: boolean;
+  waveformTimeline: boolean;
+  waveformMinimap: boolean;
+  _preserveLoopOnNextSeek?: boolean; // Internal flag for loop activation
   
   addTrack: (file: File) => void;
   removeTrack: (id: string) => void;
@@ -58,10 +85,22 @@ export interface AudioStore {
   setActiveLoopTrack: (trackId: string | null) => void;
   toggleLoopPanel: () => void;
 
+  // Loop v2 actions
+  toggleLoopEditMode: () => void;
+  addMarker: (time: number, label?: string) => string;
+  removeMarker: (id: string) => void;
+  updateMarkerTime: (id: string, time: number) => void;
+  createLoop: (startMarkerId: string, endMarkerId: string) => string;
+  removeLoop: (id: string) => void;
+  toggleLoopById: (id: string) => void;
+  setActiveLoop: (id: string | null) => void;
+
   zoomIn: () => void;
   zoomOut: () => void;
   setWaveformStyle: (style: 'modern' | 'classic') => void;
   setWaveformNormalize: (normalize: boolean) => void;
+  setWaveformTimeline: (timeline: boolean) => void;
+  setWaveformMinimap: (minimap: boolean) => void;
   
   initAudioContext: () => void;
 }

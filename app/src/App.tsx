@@ -1,37 +1,54 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {
-  Container,
-  Box,
-  Typography,
+  Alert,
+  AlertTitle,
   AppBar,
-  Toolbar,
-  CssBaseline,
-  ThemeProvider,
-  createTheme,
-  useMediaQuery,
+  Box,
+  Button,
   CircularProgress,
   Collapse,
-  Paper,
+  Container,
+  createTheme,
+  CssBaseline,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   IconButton,
-  Slide,
-  Menu,
-  MenuItem,
   ListItemIcon,
   ListItemText,
-  Slider, Stack, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, Button
+  Menu,
+  MenuItem,
+  Slider,
+  Stack,
+  ThemeProvider,
+  Toolbar,
+  Typography,
+  useMediaQuery
 } from '@mui/material';
-import { Loop, HelpOutline, ZoomIn, ZoomOut, MoreVert, Refresh, GraphicEq, DeleteSweep } from '@mui/icons-material';
-import { useAudioStore, restoreTracks } from './hooks/useAudioStore';
-import { useSyncWaveformScroll } from './hooks/useSyncWaveformScroll';
+import {
+  DarkMode,
+  DeleteSweep,
+  Edit,
+  GraphicEq,
+  HelpOutline,
+  LightMode,
+  MoreVert,
+  Refresh,
+  ZoomIn,
+  ZoomOut
+} from '@mui/icons-material';
+import {restoreTracks, useAudioStore} from './hooks/useAudioStore';
+import {useSyncWaveformScroll} from './hooks/useSyncWaveformScroll';
 import FileUploader from './components/FileUploader';
 import AudioTrack from './components/AudioTrack';
 import BottomControlBar from './components/BottomControlBar';
-import PhantomTimeline from './components/PhantomTimeline';
-import LoopControls from './components/LoopControls';
-import { PWAUpdatePrompt } from './components/PWAUpdatePrompt';
-import { StemuxIcon } from './components/StemuxIcon';
+import MarkersPanel from './components/MarkersPanel';
+import {PWAUpdatePrompt} from './components/PWAUpdatePrompt';
+import {StemuxIcon} from './components/StemuxIcon';
 import HelpModal from './components/HelpModal';
-import { useTranslation } from 'react-i18next';
+import {useTranslation} from 'react-i18next';
 
 declare const __APP_VERSION__: string;
 declare const __BUILD_DATE__: string;
@@ -49,7 +66,7 @@ const ZOOM_PRESETS = [
 
 function App() {
   const { t } = useTranslation();
-  const { tracks, initAudioContext, showLoopPanel, loopRegion, toggleLoopPanel, zoomLevel, waveformStyle, setWaveformStyle, waveformNormalize, setWaveformNormalize, removeAllTracks } = useAudioStore();
+  const { tracks, initAudioContext, loopState, toggleLoopEditMode, zoomLevel, waveformStyle, setWaveformStyle, waveformNormalize, setWaveformNormalize, waveformTimeline, setWaveformTimeline, waveformMinimap, setWaveformMinimap, removeAllTracks } = useAudioStore();
 
   // Sync waveform scroll across all tracks (for touch gestures)
   useSyncWaveformScroll(zoomLevel > 0);
@@ -102,16 +119,17 @@ function App() {
   const [helpModalOpen, setHelpModalOpen] = useState(false);
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
+  const [showEditModeAlert, setShowEditModeAlert] = useState(() => {
+    return localStorage.getItem('hideEditModeAlert') !== 'true';
+  });
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Show phantom timeline if loop panel is open OR if a loop is active
-  const hasActiveLoop = loopRegion.enabled && loopRegion.start < loopRegion.end && loopRegion.end > 0;
-  const showPhantomTimeline = showLoopPanel || hasActiveLoop;
   const hasLoadedTracks = tracks.length > 0;
-  const hasLoopDefined = loopRegion.start < loopRegion.end && loopRegion.end > 0;
 
   // Detect system theme preference
-  const prefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
+  const systemPrefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
+  const [darkModeOverride, setDarkModeOverride] = useState<boolean | null>(null);
+  const prefersDarkMode = darkModeOverride !== null ? darkModeOverride : systemPrefersDarkMode;
 
   // Detect screen size for responsive scaling
   const isLargeScreen = useMediaQuery('(min-width:1920px)'); // 4K, 1440p+
@@ -323,6 +341,7 @@ function App() {
               max={100}
               disabled={!hasLoadedTracks}
               size="small"
+              color="secondary"
               sx={{
                 width: 120,
                 mx: 1,
@@ -340,26 +359,24 @@ function App() {
               <ZoomIn />
             </IconButton>
             <Stack gap={2} direction="row" alignItems="center">
-            {/* Loop button on the right */}
+
+            {/* Loop v2 Edit Mode button */}
             <IconButton
               color="inherit"
-              onClick={toggleLoopPanel}
+              onClick={toggleLoopEditMode}
               disabled={!hasLoadedTracks}
-              aria-label={t('controls.loop')}
+              aria-label="Loop Edit Mode"
               sx={{
-                bgcolor: hasLoopDefined
-                  ? (loopRegion.enabled ? 'success.main' : 'warning.main')
-                  : 'transparent',
+                bgcolor: loopState.editMode ? 'warning.main' : 'transparent',
+                color: loopState.editMode ? 'warning.contrastText' : 'inherit',
                 '&:hover': {
-                  bgcolor: hasLoopDefined
-                    ? (loopRegion.enabled ? 'success.dark' : 'warning.dark')
-                    : 'action.hover',
+                  bgcolor: loopState.editMode ? 'warning.dark' : 'action.hover',
                 },
               }}
             >
-
-              <Loop />
+              <Edit />
             </IconButton>
+            
             {/* Menu button */}
             <IconButton
               color="inherit"
@@ -392,6 +409,20 @@ function App() {
                 </ListItemIcon>
                 <ListItemText>{t('help.title')}</ListItemText>
               </MenuItem>
+
+
+              <MenuItem onClick={() => {
+                setDarkModeOverride(prev => prev === null ? !systemPrefersDarkMode : !prev);
+              }}>
+                <ListItemIcon>
+                  {prefersDarkMode ? <LightMode fontSize="small" /> : <DarkMode fontSize="small" />}
+                </ListItemIcon>
+                <ListItemText>
+                  {prefersDarkMode ? 'Light Mode' : 'Dark Mode'}
+                </ListItemText>
+              </MenuItem>
+
+              {/* waveform*/}
               <MenuItem onClick={() => {
                 setWaveformStyle(waveformStyle === 'modern' ? 'classic' : 'modern');
               }}>
@@ -402,6 +433,7 @@ function App() {
                   {waveformStyle === 'modern' ? t('menu.waveformClassic') : t('menu.waveformModern')}
                 </ListItemText>
               </MenuItem>
+
               <MenuItem onClick={() => {
                 setWaveformNormalize(!waveformNormalize);
               }}>
@@ -412,7 +444,27 @@ function App() {
                   {waveformNormalize ? t('menu.normalizeOff') : t('menu.normalizeOn')}
                 </ListItemText>
               </MenuItem>
-              <MenuItem 
+              <MenuItem onClick={() => {
+                setWaveformTimeline(!waveformTimeline);
+              }}>
+                <ListItemIcon>
+                  <GraphicEq fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>
+                  Timeline {waveformTimeline ? 'Off' : 'On'}
+                </ListItemText>
+              </MenuItem>
+              <MenuItem onClick={() => {
+                setWaveformMinimap(!waveformMinimap);
+              }}>
+                <ListItemIcon>
+                  <GraphicEq fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>
+                  Minimap {waveformMinimap ? 'Off' : 'On'}
+                </ListItemText>
+              </MenuItem>
+              <MenuItem
                 onClick={() => {
                   setMenuAnchorEl(null);
                   setDeleteAllDialogOpen(true);
@@ -533,27 +585,23 @@ function App() {
             </Box>
           ) : (
             <Box>
-              {/* Loop Panel - shown above tracks when active */}
-              <Slide direction="down" in={showPhantomTimeline} mountOnEnter unmountOnExit>
-                <Paper
-                  elevation={2}
-                  sx={{
-                    p: 2,
-                    mb: 2,
-                    bgcolor: (theme) => theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50',
+              {/* Markers Panel - shown when markers exist */}
+              <MarkersPanel />
+
+              {/* Edit Mode Alert */}
+              <Collapse in={loopState.editMode && showEditModeAlert}>
+                <Alert 
+                  severity="warning" 
+                  onClose={() => {
+                    setShowEditModeAlert(false);
+                    localStorage.setItem('hideEditModeAlert', 'true');
                   }}
+                  sx={{ mx: 2, mt: 2 }}
                 >
-                  <PhantomTimeline />
-                  <Collapse in={showLoopPanel}>
-                    <Box>
-                      <Typography variant="caption" fontWeight={600} color="text.secondary" mt={2} mb={1.5} display="block">
-                        {t('loop.title')}
-                      </Typography>
-                      <LoopControls />
-                    </Box>
-                  </Collapse>
-                </Paper>
-              </Slide>
+                  <AlertTitle>Mode Édition</AlertTitle>
+                  Cliquez sur la forme d'onde pour créer des repères et boucles. <a href="#" onClick={(e) => { e.preventDefault(); setHelpModalOpen(true); }} style={{ color: 'inherit' }}>Plus d'infos</a>
+                </Alert>
+              </Collapse>
 
               {tracks.map((track) => (
                 <AudioTrack key={track.id} track={track} />
