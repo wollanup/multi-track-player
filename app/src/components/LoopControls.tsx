@@ -130,8 +130,16 @@ const LoopControls = () => {
                                     <ToggleButton value="duration">{t('loop.duration')}</ToggleButton>
                                 </ToggleButtonGroup>
 
-                                {/* Single row of adjustment buttons */}
-                                <Stack direction="row" spacing={1.5} sx={{justifyContent: 'center'}}>
+                                {/* Single row of adjustment buttons - wraps on mobile */}
+                                <Stack 
+                                    direction="row" 
+                                    spacing={1} 
+                                    sx={{
+                                        justifyContent: 'center',
+                                        flexWrap: 'wrap',
+                                        gap: 1
+                                    }}
+                                >
                                     <Button size="small"
                                             variant="outlined"
                                             color="inherit"
