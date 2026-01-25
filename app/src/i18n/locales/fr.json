@@ -76,6 +76,14 @@
     "interface": "Interface",
     "lightMode": "Mode clair",
     "refresh": "Recharger l'application",
+    "theme": "Thème",
+    "themeDialog": {
+      "close": "Fermer",
+      "dark": "Sombre",
+      "light": "Clair",
+      "system": "Système",
+      "title": "Choisir le thème"
+    },
     "title": "Menu"
   },
   "pwa": {

@@ -25,7 +25,11 @@ import {
   ThemeProvider,
   Toolbar,
   Typography,
-  useMediaQuery
+  useMediaQuery,
+  Radio,
+  RadioGroup,
+  FormControlLabel,
+  FormControl
 } from '@mui/material';
 import {
   DarkMode,
@@ -130,6 +134,7 @@ function App() {
   const [isLoadingStorage, setIsLoadingStorage] = useState(true);
   const [helpModalOpen, setHelpModalOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [themeDialogOpen, setThemeDialogOpen] = useState(false);
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
   const [showEditModeAlert, setShowEditModeAlert] = useState(() => {
@@ -141,8 +146,11 @@ function App() {
 
   // Detect system theme preference
   const systemPrefersDarkMode = useMediaQuery('(prefers-color-scheme: dark)');
-  const [darkModeOverride, setDarkModeOverride] = useState<boolean | null>(null);
-  const prefersDarkMode = darkModeOverride !== null ? darkModeOverride : systemPrefersDarkMode;
+  const [themeMode, setThemeMode] = useState<'light' | 'dark' | 'system'>(() => {
+    const saved = localStorage.getItem('themeMode');
+    return (saved === 'light' || saved === 'dark' || saved === 'system') ? saved : 'system';
+  });
+  const prefersDarkMode = themeMode === 'system' ? systemPrefersDarkMode : themeMode === 'dark';
 
   // Detect screen size for responsive scaling
   const isLargeScreen = useMediaQuery('(min-width:1920px)'); // 4K, 1440p+
@@ -412,13 +420,14 @@ function App() {
 
 
               <MenuItem onClick={() => {
-                setDarkModeOverride(prev => prev === null ? !systemPrefersDarkMode : !prev);
+                setMenuAnchorEl(null);
+                setThemeDialogOpen(true);
               }}>
                 <ListItemIcon>
-                  {prefersDarkMode ? <LightMode fontSize="small" /> : <DarkMode fontSize="small" />}
+                  {prefersDarkMode ? <DarkMode fontSize="small" /> : <LightMode fontSize="small" />}
                 </ListItemIcon>
                 <ListItemText>
-                  {prefersDarkMode ? t('menu.lightMode') : t('menu.darkMode')}
+                  {t('menu.theme')}
                 </ListItemText>
               </MenuItem>
 
@@ -486,6 +495,50 @@ function App() {
         
         {/* Interface Settings Modal */}
         <SettingsUI open={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} />
+
+        {/* Theme Selection Dialog */}
+        <Dialog
+          open={themeDialogOpen}
+          onClose={() => setThemeDialogOpen(false)}
+          maxWidth="xs"
+          fullWidth
+        >
+          <DialogTitle>{t('menu.themeDialog.title')}</DialogTitle>
+          <DialogContent>
+            <FormControl component="fieldset" fullWidth sx={{ mt: 1 }}>
+              <RadioGroup
+                value={themeMode}
+                onChange={(e) => {
+                  const newMode = e.target.value as 'light' | 'dark' | 'system';
+                  setThemeMode(newMode);
+                  localStorage.setItem('themeMode', newMode);
+                  logger.log(`🎨 Theme mode changed to: ${newMode}`);
+                }}
+              >
+                <FormControlLabel
+                  value="system"
+                  control={<Radio />}
+                  label={t('menu.themeDialog.system')}
+                />
+                <FormControlLabel
+                  value="light"
+                  control={<Radio />}
+                  label={t('menu.themeDialog.light')}
+                />
+                <FormControlLabel
+                  value="dark"
+                  control={<Radio />}
+                  label={t('menu.themeDialog.dark')}
+                />
+              </RadioGroup>
+            </FormControl>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setThemeDialogOpen(false)}>
+              {t('menu.themeDialog.close')}
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         {/* Delete All Tracks Confirmation Dialog */}
         <Dialog

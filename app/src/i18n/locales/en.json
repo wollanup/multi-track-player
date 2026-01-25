@@ -76,6 +76,14 @@
     "interface": "Interface",
     "lightMode": "Light mode",
     "refresh": "Refresh app",
+    "theme": "Theme",
+    "themeDialog": {
+      "close": "Close",
+      "dark": "Dark",
+      "light": "Light",
+      "system": "System",
+      "title": "Choose theme"
+    },
     "title": "Menu"
   },
   "pwa": {
