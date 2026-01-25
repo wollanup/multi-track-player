@@ -28,6 +28,13 @@ class Logger {
     }
   }
 
+  /**
+   * Alias for debug() - more intuitive for general logging
+   */
+  log(...args: unknown[]) {
+    this.debug(...args);
+  }
+
   info(...args: unknown[]) {
     if (this.level <= LOG_LEVELS.INFO) {
       console.info('ℹ️', ...args);
