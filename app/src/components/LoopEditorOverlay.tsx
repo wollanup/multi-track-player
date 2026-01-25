@@ -16,6 +16,7 @@ const LoopEditorOverlay = ({ containerRef }: LoopEditorOverlayProps) => {
     addMarker,
     createLoop,
     toggleLoopById,
+    setActiveLoop,
     seek,
   } = useAudioStore();
 
@@ -165,7 +166,13 @@ const LoopEditorOverlay = ({ containerRef }: LoopEditorOverlayProps) => {
   const handleMarkerClick = (id: string) => {
     const marker = loopState.markers.find(m => m.id === id);
     if (marker && !loopState.editMode) {
-      logger.debug(`📍 Seeking to marker at ${marker.time.toFixed(2)}s`);
+      logger.debug(`📍 Seeking to marker at ${marker.time.toFixed(2)}s - disabling loop`);
+      
+      // Disable loop when clicking on a marker (cleaner UX)
+      if (loopState.activeLoopId) {
+        setActiveLoop(null);
+      }
+      
       seek(marker.time);
     }
   };

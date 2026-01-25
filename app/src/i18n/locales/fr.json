@@ -68,20 +68,38 @@
     "tracks": "Chargement des pistes..."
   },
   "menu": {
+    "darkMode": "Mode sombre",
     "deleteAllConfirmButton": "Tout supprimer",
     "deleteAllConfirmMessage": "Êtes-vous sûr de vouloir supprimer toutes les pistes ? Cette action est irréversible.",
     "deleteAllConfirmTitle": "Supprimer toutes les pistes ?",
     "deleteAllTracks": "Supprimer toutes les pistes",
-    "normalizeOff": "Ne pas normaliser",
-    "normalizeOn": "Normaliser",
-    "refresh": "Rafraîchir l'application",
-    "title": "Menu",
-    "waveformClassic": "Style classique",
-    "waveformModern": "Style moderne"
+    "interface": "Interface",
+    "lightMode": "Mode clair",
+    "refresh": "Recharger l'application",
+    "title": "Menu"
   },
   "pwa": {
     "reload": "Recharger",
     "updateAvailable": "Nouvelle version disponible ! Cliquez pour recharger."
+  },
+  "settings": {
+    "title": "Paramètres d'interface",
+    "waveformStyle": {
+      "title": "Waveform moderne",
+      "description": "Utiliser des barres arrondies au lieu des lignes classiques"
+    },
+    "normalize": {
+      "title": "Normaliser les waveforms",
+      "description": "Ajuster automatiquement les niveaux pour un affichage visuel cohérent"
+    },
+    "timeline": {
+      "title": "Afficher la timeline",
+      "description": "Afficher les marqueurs de temps sur chaque waveform"
+    },
+    "minimap": {
+      "title": "Afficher la minimap",
+      "description": "Afficher un aperçu miniature de la waveform complète"
+    }
   },
   "speed": {
     "custom": "Personnalisée",

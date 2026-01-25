@@ -1,29 +1,23 @@
-import { useEffect, useState } from 'react';
+import {useEffect, useState} from 'react';
 import {
   AppBar,
-  Toolbar,
-  Typography,
   Box,
-  Stack,
   Button,
   Fab,
-  styled,
-  Slider,
   IconButton,
   Popover,
+  Slider,
+  Stack,
+  styled,
+  Toolbar,
+  Typography,
 } from '@mui/material';
-import {
-  PlayArrow,
-  Pause,
-  Speed,
-  VolumeUp,
-  SkipPrevious,
-  Loop,
-} from '@mui/icons-material';
-import { useAudioStore } from '../hooks/useAudioStore';
-import { usePlaybackTime } from '../hooks/usePlaybackTime';
+import {Loop, Pause, PlayArrow, SkipPrevious, Speed, VolumeUp,} from '@mui/icons-material';
+import {useAudioStore} from '../hooks/useAudioStore';
+import {usePlaybackTime} from '../hooks/usePlaybackTime';
+import {useThrottle} from '../hooks/useThrottle';
 import PlaybackSpeedDrawer from './PlaybackSpeedDrawer';
-import { useTranslation } from 'react-i18next';
+import {useTranslation} from 'react-i18next';
 
 const StyledFab = styled(Fab)({
   position: 'absolute',
@@ -33,6 +27,27 @@ const StyledFab = styled(Fab)({
   right: 0,
   margin: '0 auto',
 });
+
+// const SmallFab = styled(Fab)(({ theme }) => ({
+//   position: 'absolute',
+//   zIndex: 1,
+//   top: -20,
+//   width: 40,
+//   height: 40,
+//   minHeight: 40,
+//   backgroundColor: theme.palette.background.paper,
+//   color: theme.palette.text.secondary,
+//   boxShadow: theme.shadows[2],
+//   '&:hover': {
+//     backgroundColor: theme.palette.mode === 'dark' 
+//       ? theme.palette.action.hover 
+//       : theme.palette.grey[100],
+//   },
+//   '&.Mui-disabled': {
+//     backgroundColor: theme.palette.background.paper,
+//     color: theme.palette.action.disabled,
+//   },
+// }));
 
 const BottomControlBar = () => {
   const { t } = useTranslation();
@@ -53,6 +68,11 @@ const BottomControlBar = () => {
   const [speedDrawerOpen, setSpeedDrawerOpen] = useState(false);
   const [tempMasterVolume, setTempMasterVolume] = useState(masterVolume);
   const [volumeAnchorEl, setVolumeAnchorEl] = useState<HTMLButtonElement | null>(null);
+
+  // Throttled master volume update (max 20 updates/sec = 50ms)
+  const throttledSetMasterVolume = useThrottle((volume: number) => {
+    setMasterVolume(volume);
+  }, 50);
 
   // Sync temp volume with store when it changes externally
   useEffect(() => {
@@ -81,9 +101,7 @@ const BottomControlBar = () => {
       // Accélération progressive linéaire de 1x à 5x sur ACCELERATION_DURATION ms
       const progress = Math.min(elapsed / ACCELERATION_DURATION, 1);
       const multiplier = 1 + (progress * (MAX_ACCELERATION - 1));
-      const seekAmount = CONTINUOUS_SEEK_BASE * multiplier;
-      
-      return seekAmount;
+      return CONTINUOUS_SEEK_BASE * multiplier;
     };
 
     const startContinuousSeek = (direction: number) => {
@@ -198,6 +216,14 @@ const BottomControlBar = () => {
     };
   }, [playbackState.isPlaying, play, pause, seek]);
 
+  // Handler for quick rewind/forward buttons (5 seconds jump)
+  // const handleQuickSeek = (direction: -1 | 1) => {
+  //   const currentTime = playbackState.currentTime;
+  //   const duration = playbackState.duration;
+  //   const newTime = Math.max(0, Math.min(duration, currentTime + direction * 5));
+  //   seek(newTime);
+  // };
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = Math.floor(seconds % 60);
@@ -229,13 +255,44 @@ const BottomControlBar = () => {
       <Toolbar sx={{ gap: 2 }}>
         {/* FAB Play/Pause centered on top of AppBar - Hidden if no tracks */}
         {hasLoadedTracks && (
-          <StyledFab
-            color="primary"
-            aria-label={playbackState.isPlaying ? t('controls.pause') : t('controls.play')}
-            onClick={() => (playbackState.isPlaying ? pause() : play())}
-          >
-            {playbackState.isPlaying ? <Pause /> : (loopRegion.enabled ? <Loop /> : <PlayArrow />)}
-          </StyledFab>
+          <>
+            {/* Quick Rewind Button */}
+            {/*<SmallFab*/}
+            {/*  size="small"*/}
+            {/*  disabled={!hasLoadedTracks}*/}
+            {/*  onClick={() => handleQuickSeek(-1)}*/}
+            {/*  aria-label="Rewind 5 seconds"*/}
+            {/*  sx={{*/}
+            {/*    left: '50%',*/}
+            {/*    transform: 'translateX(calc(-100% - 42px))',*/}
+            {/*  }}*/}
+            {/*>*/}
+            {/*  <FastRewind fontSize="small" />*/}
+            {/*</SmallFab>*/}
+
+            {/* Play/Pause FAB */}
+            <StyledFab
+              color="primary"
+              aria-label={playbackState.isPlaying ? t('controls.pause') : t('controls.play')}
+              onClick={() => (playbackState.isPlaying ? pause() : play())}
+            >
+              {playbackState.isPlaying ? <Pause /> : (loopRegion.enabled ? <Loop /> : <PlayArrow />)}
+            </StyledFab>
+
+            {/* Quick Forward Button */}
+            {/*<SmallFab*/}
+            {/*  size="small"*/}
+            {/*  disabled={!hasLoadedTracks}*/}
+            {/*  onClick={() => handleQuickSeek(1)}*/}
+            {/*  aria-label="Forward 5 seconds"*/}
+            {/*  sx={{*/}
+            {/*    left: '50%',*/}
+            {/*    transform: 'translateX(42px)',*/}
+            {/*  }}*/}
+            {/*>*/}
+            {/*  <FastForward fontSize="small" />*/}
+            {/*</SmallFab>*/}
+          </>
         )}
 
         {/* Time display with skip to start button */}
@@ -278,7 +335,9 @@ const BottomControlBar = () => {
           <Slider
             value={tempMasterVolume * 100}
             onChange={(_, value) => {
-              setTempMasterVolume((value as number) / 100);
+              const newValue = (value as number) / 100;
+              setTempMasterVolume(newValue);
+              throttledSetMasterVolume(newValue);
             }}
             onChangeCommitted={(_, value) => {
               setMasterVolume((value as number) / 100);
@@ -327,7 +386,9 @@ const BottomControlBar = () => {
               <Slider
                 value={tempMasterVolume * 100}
                 onChange={(_, value) => {
-                  setTempMasterVolume((value as number) / 100);
+                  const newValue = (value as number) / 100;
+                  setTempMasterVolume(newValue);
+                  throttledSetMasterVolume(newValue);
                 }}
                 onChangeCommitted={(_, value) => {
                   setMasterVolume((value as number) / 100);

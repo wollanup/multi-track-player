@@ -253,8 +253,19 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
       console.error('Failed to delete audio files:', error);
     }
 
-    // Clear tracks
-    set({ tracks: [] });
+    // Clear tracks AND loop state (markers + loops)
+    set({ 
+      tracks: [],
+      loopState: {
+        editMode: false,
+        markers: [],
+        loops: [],
+        activeLoopId: null,
+      }
+    });
+    
+    // Clear loop state from storage
+    saveLoopV2State([], [], null);
     saveTrackSettings([]);
   },
 

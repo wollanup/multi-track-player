@@ -15,6 +15,11 @@ const MarkersPanel = () => {
   if (loopState.markers.length === 0) return null;
 
   const handleMarkerClick = (time: number) => {
+    // Disable loop when clicking on a marker (cleaner UX)
+    if (loopState.activeLoopId) {
+      setActiveLoop(null);
+    }
+    
     seek(time);
     play();
   };

@@ -48,6 +48,7 @@ import MarkersPanel from './components/MarkersPanel';
 import {PWAUpdatePrompt} from './components/PWAUpdatePrompt';
 import {StemuxIcon} from './components/StemuxIcon';
 import HelpModal from './components/HelpModal';
+import SettingsUI from './components/SettingsUI';
 import {useTranslation} from 'react-i18next';
 import {logger} from './utils/logger';
 
@@ -67,11 +68,7 @@ const ZOOM_PRESETS = [
 
 function App() {
   const { t } = useTranslation();
-  const { tracks, initAudioContext, loopState, toggleLoopEditMode, zoomLevel, waveformStyle, setWaveformStyle, waveformNormalize, setWaveformNormalize, removeAllTracks } = useAudioStore();
-  const waveformTimeline = useAudioStore(state => state.waveformTimeline);
-  const setWaveformTimeline = useAudioStore(state => state.setWaveformTimeline);
-  const waveformMinimap = useAudioStore(state => state.waveformMinimap);
-  const setWaveformMinimap = useAudioStore(state => state.setWaveformMinimap);
+  const { tracks, initAudioContext, loopState, toggleLoopEditMode, zoomLevel, removeAllTracks } = useAudioStore();
 
   // Sync waveform scroll across all tracks (for touch gestures)
   useSyncWaveformScroll(zoomLevel > 0);
@@ -132,6 +129,7 @@ function App() {
 
   const [isLoadingStorage, setIsLoadingStorage] = useState(true);
   const [helpModalOpen, setHelpModalOpen] = useState(false);
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
   const [showEditModeAlert, setShowEditModeAlert] = useState(() => {
@@ -420,52 +418,27 @@ function App() {
                   {prefersDarkMode ? <LightMode fontSize="small" /> : <DarkMode fontSize="small" />}
                 </ListItemIcon>
                 <ListItemText>
-                  {prefersDarkMode ? 'Light Mode' : 'Dark Mode'}
+                  {prefersDarkMode ? t('menu.lightMode') : t('menu.darkMode')}
                 </ListItemText>
               </MenuItem>
 
-              {/* waveform*/}
-              <MenuItem onClick={() => {
-                setWaveformStyle(waveformStyle === 'modern' ? 'classic' : 'modern');
+              {/* Interface Settings */}
+              <MenuItem onClick={(e) => {
+                setMenuAnchorEl(null);
+                // Blur the button to avoid aria-hidden focus conflict
+                if (e.currentTarget) {
+                  (e.currentTarget as HTMLElement).blur();
+                }
+                setTimeout(() => setSettingsModalOpen(true), 50);
               }}>
                 <ListItemIcon>
                   <GraphicEq fontSize="small" />
                 </ListItemIcon>
                 <ListItemText>
-                  {waveformStyle === 'modern' ? t('menu.waveformClassic') : t('menu.waveformModern')}
+                  {t('menu.interface')}
                 </ListItemText>
               </MenuItem>
 
-              <MenuItem onClick={() => {
-                setWaveformNormalize(!waveformNormalize);
-              }}>
-                <ListItemIcon>
-                  <GraphicEq fontSize="small" />
-                </ListItemIcon>
-                <ListItemText>
-                  {waveformNormalize ? t('menu.normalizeOff') : t('menu.normalizeOn')}
-                </ListItemText>
-              </MenuItem>
-              <MenuItem onClick={() => {
-                setWaveformTimeline(!waveformTimeline);
-              }}>
-                <ListItemIcon>
-                  <GraphicEq fontSize="small" />
-                </ListItemIcon>
-                <ListItemText>
-                  Timeline {waveformTimeline ? 'Off' : 'On'}
-                </ListItemText>
-              </MenuItem>
-              <MenuItem onClick={() => {
-                setWaveformMinimap(!waveformMinimap);
-              }}>
-                <ListItemIcon>
-                  <GraphicEq fontSize="small" />
-                </ListItemIcon>
-                <ListItemText>
-                  Minimap {waveformMinimap ? 'Off' : 'On'}
-                </ListItemText>
-              </MenuItem>
               <MenuItem
                 onClick={() => {
                   setMenuAnchorEl(null);
@@ -510,6 +483,9 @@ function App() {
 
         {/* Help Modal */}
         <HelpModal open={helpModalOpen} onClose={() => setHelpModalOpen(false)} />
+        
+        {/* Interface Settings Modal */}
+        <SettingsUI open={settingsModalOpen} onClose={() => setSettingsModalOpen(false)} />
 
         {/* Delete All Tracks Confirmation Dialog */}
         <Dialog
