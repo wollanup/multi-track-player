@@ -17,6 +17,7 @@ import {
 import {Close, Edit, Headset, VolumeOff, VolumeUp,} from '@mui/icons-material';
 import {useTranslation} from 'react-i18next';
 import {useAudioStore} from '../hooks/useAudioStore';
+import {useThrottle} from '../hooks/useThrottle';
 import WaveformDisplay from './WaveformDisplay';
 import type {AudioTrack as AudioTrackType} from '../types/audio';
 
@@ -48,6 +49,11 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
   // Volume state: use drag value when dragging, otherwise sync with track.volume
   const [isDraggingVolume, setIsDraggingVolume] = useState(false);
   const [dragVolume, setDragVolume] = useState(track.volume * 100);
+  
+  // Throttled volume update (max 20 updates/sec = 50ms)
+  const throttledSetVolume = useThrottle((id: string, volume: number) => {
+    setVolume(id, volume);
+  }, 50);
   
   const localVolume = isDraggingVolume ? dragVolume : track.volume * 100;
 
@@ -120,12 +126,16 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
   };
 
   const handleVolumeChange = (_: Event, value: number | number[]) => {
+    const newValue = value as number;
+    setDragVolume(newValue);
     setIsDraggingVolume(true);
-    setDragVolume(value as number);
+    // Apply volume in real-time with throttling
+    throttledSetVolume(track.id, newValue / 100);
   };
 
   const handleVolumeChangeCommitted = (_: Event | React.SyntheticEvent, value: number | number[]) => {
-    setVolume(track.id, (value as number) / 100);
+    const newValue = value as number;
+    setVolume(track.id, newValue / 100);
     setIsDraggingVolume(false);
   };
 
