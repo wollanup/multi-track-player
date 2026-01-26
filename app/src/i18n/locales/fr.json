@@ -7,6 +7,7 @@
     "masterVolume": "Volume général",
     "pause": "Pause",
     "play": "Lecture",
+    "rewind5": "Reculer de 5 secondes (maintenir pour continu)",
     "skipToStart": "Retour au début"
   },
   "help": {
@@ -75,10 +76,12 @@
     "deleteAllDialogConfirm": "Supprimer tout",
     "deleteLoop": "Supprimer la boucle",
     "deleteMarker": "Supprimer le repère",
+    "editMode": "Mode édition repères",
     "loops": "Boucles:",
     "markers": "Repères:",
     "setLoopEnd": "Définir comme fin de boucle",
-    "setLoopStart": "Définir comme début de boucle"
+    "setLoopStart": "Définir comme début de boucle",
+    "title": "édition"
   },
   "menu": {
     "darkMode": "Mode sombre",
@@ -134,7 +137,9 @@
     "cancelButton": "Annuler",
     "deleteConfirmButton": "Supprimer",
     "deleteConfirmMessage": "Êtes-vous sûr de vouloir supprimer cette piste ? Cette action est irréversible.",
-    "deleteConfirmTitle": "Supprimer la piste ?"
+    "deleteConfirmTitle": "Supprimer la piste ?",
+    "importing": "Import du fichier en cours...",
+    "loading": "Chargement..."
   },
   "upload": {
     "description": "Déposez des fichiers audio ici ou cliquez pour sélectionner",

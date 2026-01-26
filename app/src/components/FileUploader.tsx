@@ -1,16 +1,23 @@
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { Paper, Typography, Box } from '@mui/material';
 import { Add } from '@mui/icons-material';
 import { useAudioStore } from '../hooks/useAudioStore';
 import { useTranslation } from 'react-i18next';
 
-const FileUploader = () => {
+interface FileUploaderProps {
+  isDraggingWindow?: boolean;
+}
+
+const FileUploader = ({ isDraggingWindow = false }: FileUploaderProps) => {
   const { addTrack, tracks } = useAudioStore();
   const { t } = useTranslation();
+  const [isDragging, setIsDragging] = useState(false);
 
   const handleDrop = useCallback(
     (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
+      e.stopPropagation(); // Prevent window handler from also handling
+      setIsDragging(false);
       const files = Array.from(e.dataTransfer.files);
       files.forEach((file) => {
         if (file.type.includes('audio') && tracks.length < 8) {
@@ -35,6 +42,22 @@ const FileUploader = () => {
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Only set to false if leaving the component itself, not child elements
+    if (e.currentTarget === e.target) {
+      setIsDragging(false);
+    }
   };
 
   if (tracks.length >= 8) {
@@ -43,18 +66,23 @@ const FileUploader = () => {
 
   // Compact mode when tracks are loaded
   const isCompact = tracks.length > 0;
+  
+  // Show highlight when dragging over window OR this component
+  const showHighlight = isDraggingWindow || isDragging;
 
   return (
     <Paper
       elevation={0}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
       sx={{
         p: isCompact ? 2 : 4,
         mb: 2,
         border: '2px dashed',
-        borderColor: 'primary.main',
-        bgcolor: 'background.default',
+        borderColor: showHighlight ? 'primary.main' : 'text.disabled',
+        bgcolor: showHighlight ? 'action.hover' : 'background.default',
         textAlign: 'center',
         cursor: 'pointer',
         transition: 'all 0.2s',

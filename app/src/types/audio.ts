@@ -6,6 +6,7 @@ export interface AudioTrack {
   isMuted: boolean;
   isSolo: boolean;
   color: string;
+  isLoading?: boolean; // True during file import/loading
 }
 
 export interface PlaybackState {
@@ -13,14 +14,6 @@ export interface PlaybackState {
   currentTime: number;
   duration: number;
   playbackRate: number; // 0.5 - 2.0
-}
-
-export interface LoopRegion {
-  enabled: boolean;
-  start: number;
-  end: number;
-  isSettingLoop: boolean;
-  loopStartMarker: number;
 }
 
 // Loop v2 types
@@ -49,9 +42,7 @@ export interface LoopState {
 export interface AudioStore {
   tracks: AudioTrack[];
   playbackState: PlaybackState;
-  loopRegion: LoopRegion;
   loopState: LoopState; // Loop v2
-  activeLoopTrackId: string | null;
   audioContext: AudioContext | null;
   masterVolume: number; // 0-1
   showLoopPanel: boolean;
@@ -78,11 +69,6 @@ export interface AudioStore {
   setPlaybackRate: (rate: number) => void;
   setMasterVolume: (volume: number) => void;
   
-  setLoopRegion: (start: number, end: number) => void;
-  startSettingLoop: (startTime: number) => void;
-  cancelSettingLoop: () => void;
-  toggleLoop: () => void;
-  setActiveLoopTrack: (trackId: string | null) => void;
   toggleLoopPanel: () => void;
 
   // Loop v2 actions

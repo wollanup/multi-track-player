@@ -168,7 +168,40 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
         transition: 'opacity 0.2s, border 0.2s ease-in-out',
       }}
     >
-      <Stack spacing={0}>
+      {track.isLoading ? (
+        // Loading state - minimal skeleton
+        <Stack spacing={1}>
+          <Box display="flex" alignItems="center" gap={1}>
+            <Box
+              sx={{
+                width: 14,
+                height: 14,
+                borderRadius: '50%',
+                border: '2px solid',
+                borderColor: 'primary.main',
+                borderTopColor: 'transparent',
+                animation: 'spin 1s linear infinite',
+                '@keyframes spin': {
+                  '0%': { transform: 'rotate(0deg)' },
+                  '100%': { transform: 'rotate(360deg)' },
+                },
+              }}
+            />
+            <Typography variant="subtitle1" fontWeight={600} color="text.secondary" noWrap>
+              {track.name}
+            </Typography>
+          </Box>
+          <Box
+            sx={{
+              height: 96,
+              bgcolor: 'action.hover',
+              borderRadius: 1,
+            }}
+          />
+        </Stack>
+      ) : (
+        // Normal state
+        <Stack spacing={0}>
         {/* Header */}
         <Box display="flex" alignItems="center" justifyContent="space-between" mb={1.5} gap={1}>
           {isEditingName ? (
@@ -281,6 +314,7 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
         </Stack>
         </Box>
       </Stack>
+      )}
 
       {/* Delete Confirmation Dialog */}
       <Dialog

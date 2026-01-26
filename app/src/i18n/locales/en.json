@@ -7,6 +7,7 @@
     "masterVolume": "Master volume",
     "pause": "Pause",
     "play": "Play",
+    "rewind5": "Rewind 5 seconds (hold for continuous)",
     "skipToStart": "Skip to start"
   },
   "help": {
@@ -75,10 +76,12 @@
     "deleteAllDialogConfirm": "Delete all",
     "deleteLoop": "Delete loop",
     "deleteMarker": "Delete marker",
+    "editMode": "Markers edit mode",
     "loops": "Loops:",
     "markers": "Markers:",
     "setLoopEnd": "Set as loop end",
-    "setLoopStart": "Set as loop start"
+    "setLoopStart": "Set as loop start",
+    "title": "Markers"
   },
   "menu": {
     "darkMode": "Dark mode",
@@ -134,7 +137,9 @@
     "cancelButton": "Cancel",
     "deleteConfirmButton": "Delete",
     "deleteConfirmMessage": "Are you sure you want to delete this track? This action cannot be undone.",
-    "deleteConfirmTitle": "Delete Track?"
+    "deleteConfirmTitle": "Delete Track?",
+    "importing": "Importing file...",
+    "loading": "Loading..."
   },
   "upload": {
     "description": "Drop audio files here or click to select",

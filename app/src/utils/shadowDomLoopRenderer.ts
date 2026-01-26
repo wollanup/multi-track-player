@@ -143,8 +143,6 @@ export const setupEditModeInteractions = (
     theme: Theme,
     trackDuration: number
 ) => {
-    logger.debug('🎯 setupEditModeInteractions called with trackDuration:', trackDuration);
-    
     // Remove existing interaction layer
     wrapper.querySelectorAll('[data-edit-layer]').forEach(el => el.remove());
 

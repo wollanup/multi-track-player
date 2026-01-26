@@ -121,13 +121,6 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
               seekRef.current(startMarker.time);
             }
           }
-        } else {
-          // Fallback to old loop system
-          const { loopRegion } = useAudioStore.getState();
-          if (loopRegion.enabled && loopRegion.start < loopRegion.end && currentTime >= loopRegion.end) {
-            logger.debug('🔁 Loop end reached, seeking back to:', loopRegion.start);
-            seekRef.current(loopRegion.start);
-          }
         }
 
         lastTimeUpdate = now;
@@ -165,7 +158,6 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
         if (wrapper) {
           // Inject markers and loops using external module
           const trackDuration = wavesurfer.getDuration();
-          logger.debug('🎯 Track duration for markers:', trackDuration);
           injectMarkersAndLoops(wsElement, loopState, playbackState, theme, trackDuration);
 
           // Add interaction layer for edit mode using external module
@@ -379,7 +371,6 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
     if (!wrapper) return;
 
     const trackDuration = wavesurferRef.current?.getDuration() || 0;
-    logger.debug('🎯 Track duration for re-render:', trackDuration);
     injectMarkersAndLoops(wsElement, loopState, playbackState, theme, trackDuration);
     setupEditModeInteractions(wrapper, wsElement, loopState, playbackState, isDraggingRef, theme, trackDuration);
   }, [isReady, loopState.markers, loopState.loops, loopState.editMode]); // REMOVED: playbackState.isPlaying, playbackState.duration, theme

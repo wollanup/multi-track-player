@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AudioStore, AudioTrack, LoopRegion, Marker, Loop } from '../types/audio';
+import type { AudioStore, AudioTrack, Marker, Loop } from '../types/audio';
 import { saveAudioFile, deleteAudioFile, getAllAudioFiles } from '../utils/indexedDB';
 import type WaveSurfer from 'wavesurfer.js';
 import {logger} from '../utils/logger';
@@ -27,31 +27,6 @@ const saveTrackSettings = (tracks: AudioTrack[]) => {
 export const loadTrackSettings = () => {
   const stored = localStorage.getItem('practice-tracks-settings');
   return stored ? JSON.parse(stored) : [];
-};
-
-// Save loop region to localStorage
-const saveLoopRegion = (loopRegion: LoopRegion) => {
-  localStorage.setItem('practice-tracks-loop', JSON.stringify(loopRegion));
-};
-
-// Load loop region from localStorage
-const loadLoopRegion = () => {
-  const stored = localStorage.getItem('practice-tracks-loop');
-  return stored ? { ...JSON.parse(stored), isSettingLoop: false, loopStartMarker: 0 } : { enabled: false, start: 0, end: 0, isSettingLoop: false, loopStartMarker: 0 };
-};
-
-// Save active loop track ID to localStorage
-const saveActiveLoopTrackId = (trackId: string | null) => {
-  if (trackId) {
-    localStorage.setItem('practice-tracks-active-loop', trackId);
-  } else {
-    localStorage.removeItem('practice-tracks-active-loop');
-  }
-};
-
-// Load active loop track ID from localStorage
-const loadActiveLoopTrackId = () => {
-  return localStorage.getItem('practice-tracks-active-loop');
 };
 
 // Save playback rate to localStorage
@@ -166,12 +141,10 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
     duration: 0,
     playbackRate: loadPlaybackRate(),
   },
-  loopRegion: loadLoopRegion(),
   loopState: {
     ...loadLoopV2State(),
     editMode: false, // Always start in standard mode
   },
-  activeLoopTrackId: loadActiveLoopTrackId(),
   masterVolume: loadMasterVolume(),
   audioContext: null,
   showLoopPanel: false,
@@ -209,6 +182,7 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
       isMuted: false,
       isSolo: false,
       color,
+      isLoading: true, // Mark as loading during import
     };
 
     const newTracks = [...tracks, newTrack];
@@ -218,8 +192,22 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
     // Save file to IndexedDB
     try {
       await saveAudioFile(id, file);
+      
+      // Mark as loaded
+      set((state) => ({
+        tracks: state.tracks.map((t) =>
+          t.id === id ? { ...t, isLoading: false } : t
+        ),
+      }));
     } catch (error) {
       console.error('Failed to save audio file:', error);
+      
+      // Mark as loaded even on error
+      set((state) => ({
+        tracks: state.tracks.map((t) =>
+          t.id === id ? { ...t, isLoading: false } : t
+        ),
+      }));
     }
   },
 
@@ -365,15 +353,6 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
     // Clear finished set at the start of each play
     finishedInstances.clear();
 
-    // If loop enabled, seek to loop start before playing
-    const { loopRegion } = get();
-    if (loopRegion.enabled && loopRegion.start < loopRegion.end && loopRegion.end > 0) {
-      logger.debug('🔁 Loop enabled, seeking to start:', loopRegion.start);
-      wavesurferInstances.forEach((ws) => {
-        ws.seekTo(loopRegion.start / ws.getDuration());
-      });
-    }
-
     // Call play on all WaveSurfer instances SIMULTANEOUSLY
     const instances = Array.from(wavesurferInstances.entries());
     Promise.all(
@@ -473,33 +452,6 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
   setMasterVolume: (volume: number) => {
     set({ masterVolume: volume });
     saveMasterVolume(volume);
-  },
-
-  setLoopRegion: (start: number, end: number) => {
-    const newLoopRegion = { ...get().loopRegion, start, end, isSettingLoop: false, loopStartMarker: 0 };
-    set({ loopRegion: newLoopRegion });
-    saveLoopRegion(newLoopRegion);
-  },
-
-  startSettingLoop: (startTime: number) => {
-    const newLoopRegion = { ...get().loopRegion, isSettingLoop: true, loopStartMarker: startTime };
-    set({ loopRegion: newLoopRegion });
-  },
-
-  cancelSettingLoop: () => {
-    const newLoopRegion = { ...get().loopRegion, isSettingLoop: false, loopStartMarker: 0 };
-    set({ loopRegion: newLoopRegion });
-  },
-
-  toggleLoop: () => {
-    const newLoopRegion = { ...get().loopRegion, enabled: !get().loopRegion.enabled };
-    set({ loopRegion: newLoopRegion });
-    saveLoopRegion(newLoopRegion);
-  },
-
-  setActiveLoopTrack: (trackId: string | null) => {
-    set({ activeLoopTrackId: trackId });
-    saveActiveLoopTrackId(trackId);
   },
 
   toggleLoopPanel: () => {
@@ -831,11 +783,9 @@ export const markTrackFinished = (trackId: string) => {
 
   if (allFinished) {
     logger.debug('🏁 All tracks finished playing');
-    const { loopRegion, pause, seek } = useAudioStore.getState();
-    if (!loopRegion.enabled) {
-      pause();
-      seek(0); // Reset to start
-    }
+    const { pause, seek } = useAudioStore.getState();
+    pause();
+    seek(0); // Reset to start
     // Clear finished set for next playback
     finishedInstances.clear();
   }

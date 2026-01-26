@@ -1,18 +1,6 @@
-import {useEffect, useState} from 'react';
-import {
-  AppBar,
-  Box,
-  Button,
-  Fab,
-  IconButton,
-  Popover,
-  Slider,
-  Stack,
-  styled,
-  Toolbar,
-  Typography,
-} from '@mui/material';
-import {Loop, Pause, PlayArrow, SkipPrevious, Speed, VolumeUp,} from '@mui/icons-material';
+import {useEffect, useRef, useState} from 'react';
+import {AppBar, Box, Button, Fab, IconButton, Popover, Slider, Stack, styled, Toolbar, Typography} from '@mui/material';
+import {FastRewind, Pause, PlayArrow, SkipPrevious, Speed, VolumeUp} from '@mui/icons-material';
 import {useAudioStore} from '../hooks/useAudioStore';
 import {usePlaybackTime} from '../hooks/usePlaybackTime';
 import {useThrottle} from '../hooks/useThrottle';
@@ -39,8 +27,8 @@ const StyledFab = styled(Fab)({
 //   color: theme.palette.text.secondary,
 //   boxShadow: theme.shadows[2],
 //   '&:hover': {
-//     backgroundColor: theme.palette.mode === 'dark' 
-//       ? theme.palette.action.hover 
+//     backgroundColor: theme.palette.mode === 'dark'
+//       ? theme.palette.action.hover
 //       : theme.palette.grey[100],
 //   },
 //   '&.Mui-disabled': {
@@ -60,9 +48,8 @@ const BottomControlBar = () => {
     masterVolume,
     setMasterVolume,
     seek,
-    loopRegion,
   } = useAudioStore();
-  
+
   const currentTime = usePlaybackTime(); // Use lightweight time tracker
 
   const [speedDrawerOpen, setSpeedDrawerOpen] = useState(false);
@@ -86,7 +73,7 @@ const BottomControlBar = () => {
     const isInContinuousModeRef = { current: false };
     const currentDirectionRef = { current: 0 };
     const continuousStartTimeRef = { current: null as number | null };
-    
+
     const HOLD_THRESHOLD = 300; // ms avant de commencer le défilement continu
     const SEEK_INTERVAL = 50; // ms entre chaque seek en mode continu
     const SINGLE_PRESS_SEEK = 5; // secondes pour un appui simple
@@ -96,7 +83,7 @@ const BottomControlBar = () => {
 
     const getAcceleratedSeekAmount = () => {
       if (continuousStartTimeRef.current === null) return CONTINUOUS_SEEK_BASE;
-      
+
       const elapsed = Date.now() - continuousStartTimeRef.current;
       // Accélération progressive linéaire de 1x à 5x sur ACCELERATION_DURATION ms
       const progress = Math.min(elapsed / ACCELERATION_DURATION, 1);
@@ -106,10 +93,10 @@ const BottomControlBar = () => {
 
     const startContinuousSeek = (direction: number) => {
       if (seekIntervalRef.current !== null) return;
-      
+
       isInContinuousModeRef.current = true;
       continuousStartTimeRef.current = Date.now();
-      
+
       seekIntervalRef.current = window.setInterval(() => {
         const currentTime = useAudioStore.getState().playbackState.currentTime;
         const duration = useAudioStore.getState().playbackState.duration;
@@ -208,7 +195,7 @@ const BottomControlBar = () => {
 
     document.addEventListener('keydown', handleKeyDown);
     document.addEventListener('keyup', handleKeyUp);
-    
+
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
       document.removeEventListener('keyup', handleKeyUp);
@@ -231,12 +218,52 @@ const BottomControlBar = () => {
   };
 
   const handleSkipToStart = () => {
-    // If loop is enabled, go to loop start, otherwise go to beginning
-    if (loopRegion.enabled && loopRegion.start < loopRegion.end) {
-      seek(loopRegion.start);
-    } else {
-      seek(0);
+    seek(0);
+  };
+
+  // Rewind button pointer event handlers
+  const rewindPointerTimeoutRef = useRef<number | null>(null);
+  const rewindSeekIntervalRef = useRef<number | null>(null);
+  const rewindStartTimeRef = useRef<number | null>(null);
+
+  const handleRewindPointerDown = () => {
+    // Wait before starting continuous mode
+    rewindPointerTimeoutRef.current = window.setTimeout(() => {
+      rewindStartTimeRef.current = Date.now();
+      rewindSeekIntervalRef.current = window.setInterval(() => {
+        const currentTime = useAudioStore.getState().playbackState.currentTime;
+
+        // Calculate accelerated seek amount
+        const elapsed = Date.now() - (rewindStartTimeRef.current || 0);
+        const progress = Math.min(elapsed / 3000, 1); // 3 seconds to max speed
+        const multiplier = 1 + (progress * 4); // 1x to 5x
+        const seekAmount = 0.5 * multiplier; // Base 0.5s per 50ms
+
+        const newTime = Math.max(0, currentTime - seekAmount);
+        seek(newTime);
+      }, 50); // 50ms interval
+    }, 300); // 300ms hold threshold
+  };
+
+  const handleRewindPointerUp = () => {
+    // Clear timeout if still waiting
+    if (rewindPointerTimeoutRef.current !== null) {
+      clearTimeout(rewindPointerTimeoutRef.current);
+      rewindPointerTimeoutRef.current = null;
+
+      // Was a short press, jump 5 seconds back
+      const currentTime = playbackState.currentTime;
+      const newTime = Math.max(0, currentTime - 5);
+      seek(newTime);
     }
+
+    // Clear interval if in continuous mode
+    if (rewindSeekIntervalRef.current !== null) {
+      clearInterval(rewindSeekIntervalRef.current);
+      rewindSeekIntervalRef.current = null;
+    }
+
+    rewindStartTimeRef.current = null;
   };
 
   const hasLoadedTracks = tracks.length > 0 && tracks.every((t) => t.file !== null);
@@ -276,7 +303,7 @@ const BottomControlBar = () => {
               aria-label={playbackState.isPlaying ? t('controls.pause') : t('controls.play')}
               onClick={() => (playbackState.isPlaying ? pause() : play())}
             >
-              {playbackState.isPlaying ? <Pause /> : (loopRegion.enabled ? <Loop /> : <PlayArrow />)}
+              {playbackState.isPlaying ? <Pause /> : <PlayArrow />}
             </StyledFab>
 
             {/* Quick Forward Button */}
@@ -305,14 +332,26 @@ const BottomControlBar = () => {
           >
             <SkipPrevious />
           </IconButton>
+          <IconButton
+            size="small"
+            onPointerDown={handleRewindPointerDown}
+            onPointerUp={handleRewindPointerUp}
+            onPointerLeave={handleRewindPointerUp}
+            onPointerCancel={handleRewindPointerUp}
+            disabled={!hasLoadedTracks}
+            aria-label={t('controls.rewind5')}
+            sx={{ touchAction: 'none' }}
+          >
+            <FastRewind />
+          </IconButton>
           <Stack direction="row" spacing={1} alignItems="center" minWidth={120}>
-            <Typography variant="body2" fontFamily="monospace">
+            <Typography variant="body2">
               {formatTime(currentTime)}
             </Typography>
             <Typography variant="body2" color="text.secondary">
               /
             </Typography>
-            <Typography variant="body2" color="text.secondary" fontFamily="monospace">
+            <Typography variant="body2" color="text.secondary">
               {formatTime(playbackState.duration)}
             </Typography>
           </Stack>
