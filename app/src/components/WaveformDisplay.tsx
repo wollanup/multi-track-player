@@ -18,9 +18,10 @@ interface WaveformDisplayProps {
 const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const wavesurferRef = useRef<WaveSurfer | null>(null);
+  const minimapRef = useRef<any>(null);
   const [isReady, setIsReady] = useState(false);
   const isDraggingRef = useRef(false);
-  const lastZoomRef = useRef(0);
+  const lastZoomRef = useRef<number | null>(null);
   const zoomRafRef = useRef<number | null>(null);
 
   const theme = useTheme();
@@ -63,8 +64,10 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
         height: 20,
         waveColor: theme.palette.mode === 'dark' ? theme.palette.grey[300] : theme.palette.grey[500],
         progressColor: theme.palette.mode === 'dark' ? theme.palette.grey[700] : theme.palette.grey[300],
+        overlayColor: theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)',
       });
       plugins.push(minimapInstance);
+      minimapRef.current = minimapInstance;
     }
 
     const wavesurfer = WaveSurfer.create({
@@ -288,7 +291,7 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
       wavesurferRef.current = null;
       wavesurfer.destroy();
     };
-  }, [track.file, track.id, waveformTimeline, waveformMinimap]); // Only recreate when plugins change
+  }, [track.file, track.id, waveformTimeline, waveformMinimap, theme.palette.mode]); // Recreate when theme changes
 
   // Handle waveform style and normalize with setOptions (no recreation needed)
   useEffect(() => {
@@ -315,6 +318,16 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
     wavesurferRef.current.setOptions(options);
     logger.debug('🎨 Waveform style updated without recreation');
   }, [waveformStyle, waveformNormalize, isReady]);
+
+  // Update minimap colors when theme changes
+  useEffect(() => {
+    if (!minimapRef.current || !isReady) return;
+
+    // WaveSurfer minimap doesn't have a direct setOptions method
+    // We need to access the minimap canvas and redraw it
+    // The simplest solution is to trigger a recreation by adding theme to main useEffect dependencies
+    // For now, we'll just log that theme changed - full recreation happens on file change
+  }, [theme.palette.mode, isReady]);
 
   // Handle zoom separately without recreating wavesurfer - THROTTLED with RAF
   useEffect(() => {
