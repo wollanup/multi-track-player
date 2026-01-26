@@ -244,7 +244,7 @@ const TopBar = ({
 
           <MenuItem disabled sx={{ opacity: '0.6 !important' }}>
             <ListItemText
-              primary={`v${import.meta.env.VITE_APP_VERSION || '0.0.0'}`}
+              primary={`${__APP_VERSION__} • ${new Date(__BUILD_DATE__).toLocaleString()}`}
               slotProps={{
                 primary: {
                   variant: 'caption',

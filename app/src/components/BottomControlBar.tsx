@@ -403,16 +403,19 @@ const BottomControlBar = () => {
           >
             <FastForward />
           </IconButton>
-          <Stack direction="row" spacing={1} alignItems="center" minWidth={120}>
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: { xs: 'auto', sm: 120 } }}>
             <Typography variant="body2">
               {formatTime(currentTime)}
             </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
-              /
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
-              {formatTime(playbackState.duration)}
-            </Typography>
+            {/* Desktop only - total time */}
+            <Box sx={{ display: { xs: 'none', sm: 'flex' }, gap: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                /
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                {formatTime(playbackState.duration)}
+              </Typography>
+            </Box>
           </Stack>
         </Stack>
 
