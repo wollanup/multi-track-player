@@ -164,10 +164,12 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
 
         if (wrapper) {
           // Inject markers and loops using external module
-          injectMarkersAndLoops(wsElement, loopState, playbackState, theme);
+          const trackDuration = wavesurfer.getDuration();
+          logger.debug('🎯 Track duration for markers:', trackDuration);
+          injectMarkersAndLoops(wsElement, loopState, playbackState, theme, trackDuration);
 
           // Add interaction layer for edit mode using external module
-          setupEditModeInteractions(wrapper, wsElement, loopState, playbackState, isDraggingRef, theme);
+          setupEditModeInteractions(wrapper, wsElement, loopState, playbackState, isDraggingRef, theme, trackDuration);
         }
       }
 
@@ -376,8 +378,10 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
     const wrapper = wsElement.shadowRoot?.querySelector('.wrapper') as HTMLElement;
     if (!wrapper) return;
 
-    injectMarkersAndLoops(wsElement, loopState, playbackState, theme);
-    setupEditModeInteractions(wrapper, wsElement, loopState, playbackState, isDraggingRef, theme);
+    const trackDuration = wavesurferRef.current?.getDuration() || 0;
+    logger.debug('🎯 Track duration for re-render:', trackDuration);
+    injectMarkersAndLoops(wsElement, loopState, playbackState, theme, trackDuration);
+    setupEditModeInteractions(wrapper, wsElement, loopState, playbackState, isDraggingRef, theme, trackDuration);
   }, [isReady, loopState.markers, loopState.loops, loopState.editMode]); // REMOVED: playbackState.isPlaying, playbackState.duration, theme
 
   // Update volume when it changes (NOT mute - that's handled in store)

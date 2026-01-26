@@ -34,15 +34,17 @@ export const injectMarkersAndLoops = (
     wsElement: HTMLElement,
     loopState: LoopState,
     playbackState: PlaybackState,
-    theme: Theme
+    theme: Theme,
+    trackDuration: number
 ) => {
     if (!wsElement || !wsElement.shadowRoot) return;
 
     const wrapper = wsElement.shadowRoot.querySelector('.wrapper') as HTMLElement;
     if (!wrapper) return;
 
-    const duration = playbackState.duration;
-    if (duration === 0) return;
+    // Use global duration for rendering markers at consistent positions across tracks
+    const globalDuration = playbackState.duration;
+    if (globalDuration === 0) return;
 
     // Remove existing markers/loops
     wrapper.querySelectorAll('[data-loop-marker], [data-loop-zone]').forEach(el => el.remove());
@@ -56,8 +58,9 @@ export const injectMarkersAndLoops = (
 
         if (!startMarker || !endMarker) return;
 
-        const startPercent = (startMarker.time / duration) * 100;
-        const widthPercent = ((endMarker.time - startMarker.time) / duration) * 100;
+        // Render loop position based on THIS track's duration
+        const startPercent = (startMarker.time / trackDuration) * 100;
+        const widthPercent = ((endMarker.time - startMarker.time) / trackDuration) * 100;
 
         // Loop is "active" (blue) only if enabled AND playing
         const isActiveLoop = loop.enabled && isPlaying;
@@ -89,7 +92,8 @@ export const injectMarkersAndLoops = (
 
     // Inject markers
     loopState.markers.forEach((marker, index) => {
-        const leftPercent = (marker.time / duration) * 100;
+        // Render marker position based on THIS track's duration
+        const leftPercent = (marker.time / trackDuration) * 100;
 
         const isInActiveLoop = loopState.loops.find(
             l => l.enabled && isPlaying && (l.startMarkerId === marker.id || l.endMarkerId === marker.id)
@@ -136,8 +140,11 @@ export const setupEditModeInteractions = (
     loopState: LoopState,
     playbackState: PlaybackState,
     isDraggingRef: React.MutableRefObject<boolean>,
-    theme: Theme
+    theme: Theme,
+    trackDuration: number
 ) => {
+    logger.debug('🎯 setupEditModeInteractions called with trackDuration:', trackDuration);
+    
     // Remove existing interaction layer
     wrapper.querySelectorAll('[data-edit-layer]').forEach(el => el.remove());
 
@@ -149,8 +156,8 @@ export const setupEditModeInteractions = (
 
     if (!loopState.editMode) return; // Only in edit mode
 
-    const duration = playbackState.duration;
-    if (duration === 0) return;
+    const globalDuration = playbackState.duration;
+    if (globalDuration === 0 || trackDuration === 0) return;
 
     // Create interaction layer
     const editLayer = document.createElement('div');
@@ -173,7 +180,7 @@ export const setupEditModeInteractions = (
         // Fixed pixel threshold (10px on each side)
         const pixelThreshold = 10;
         const totalWidth = wrapper.scrollWidth;
-        const timeThreshold = (pixelThreshold / totalWidth) * duration;
+        const timeThreshold = (pixelThreshold / totalWidth) * trackDuration;
         
         const marker = loopState.markers.find(m => Math.abs(m.time - time) < timeThreshold);
         return marker?.id || null;
@@ -193,7 +200,8 @@ export const setupEditModeInteractions = (
         // Position relative to scroll container + scroll offset
         const relativeX = (e.clientX - scrollRect.left) + scrollLeft;
         const percent = (relativeX / totalWidth) * 100;
-        const calculatedTime = (percent / 100) * duration;
+        // Use THIS track's duration to calculate the time from click position
+        const calculatedTime = (percent / 100) * trackDuration;
         
         logger.debug('🔍 getTimeFromEvent:', {
             clientX: e.clientX,
@@ -203,7 +211,9 @@ export const setupEditModeInteractions = (
             totalWidth,
             percent: percent.toFixed(2),
             time: calculatedTime.toFixed(2),
-            duration
+            trackDuration,
+            globalDuration,
+            isNaN: isNaN(calculatedTime)
         });
         
         return calculatedTime;
@@ -256,7 +266,8 @@ export const setupEditModeInteractions = (
         if (draggedMarkerId) {
             const markerElement = wrapper.querySelector(`[data-loop-marker="${draggedMarkerId}"]`) as HTMLElement;
             if (markerElement) {
-                const leftPercent = (currentTime / duration) * 100;
+                // Render position based on THIS track's duration
+                const leftPercent = (currentTime / trackDuration) * 100;
                 markerElement.style.left = `${leftPercent}%`;
             }
             return;
@@ -290,8 +301,9 @@ export const setupEditModeInteractions = (
 
         const start = Math.min(dragStartTime, currentTime);
         const end = Math.max(dragStartTime, currentTime);
-        const startPercent = (start / duration) * 100;
-        const widthPercent = ((end - start) / duration) * 100;
+        // Render preview position based on THIS track's duration
+        const startPercent = (start / trackDuration) * 100;
+        const widthPercent = ((end - start) / trackDuration) * 100;
 
         previewDiv.style.left = `${startPercent}%`;
         previewDiv.style.width = `${widthPercent}%`;
