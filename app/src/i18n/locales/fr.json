@@ -4,6 +4,7 @@
     "noTracksTitle": "Aucune piste chargée"
   },
   "controls": {
+    "forward5": "Avancer de 5 secondes (maintenir pour continu)",
     "masterVolume": "Volume général",
     "pause": "Pause",
     "play": "Lecture",

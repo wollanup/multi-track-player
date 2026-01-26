@@ -1,6 +1,6 @@
 import {useEffect, useRef, useState} from 'react';
 import {AppBar, Box, Button, Fab, IconButton, Popover, Slider, Stack, styled, Toolbar, Typography} from '@mui/material';
-import {FastRewind, Pause, PlayArrow, SkipPrevious, Speed, VolumeUp} from '@mui/icons-material';
+import {FastRewind, FastForward, Pause, PlayArrow, SkipPrevious, Speed, VolumeUp} from '@mui/icons-material';
 import {useAudioStore} from '../hooks/useAudioStore';
 import {usePlaybackTime} from '../hooks/usePlaybackTime';
 import {useThrottle} from '../hooks/useThrottle';
@@ -266,6 +266,53 @@ const BottomControlBar = () => {
     rewindStartTimeRef.current = null;
   };
 
+  // Forward button pointer event handlers
+  const forwardPointerTimeoutRef = useRef<number | null>(null);
+  const forwardSeekIntervalRef = useRef<number | null>(null);
+  const forwardStartTimeRef = useRef<number | null>(null);
+
+  const handleForwardPointerDown = () => {
+    // Wait before starting continuous mode
+    forwardPointerTimeoutRef.current = window.setTimeout(() => {
+      forwardStartTimeRef.current = Date.now();
+      forwardSeekIntervalRef.current = window.setInterval(() => {
+        const currentTime = useAudioStore.getState().playbackState.currentTime;
+        const duration = useAudioStore.getState().playbackState.duration;
+        
+        // Calculate accelerated seek amount
+        const elapsed = Date.now() - (forwardStartTimeRef.current || 0);
+        const progress = Math.min(elapsed / 3000, 1); // 3 seconds to max speed
+        const multiplier = 1 + (progress * 4); // 1x to 5x
+        const seekAmount = 0.5 * multiplier; // Base 0.5s per 50ms
+        
+        const newTime = Math.min(duration, currentTime + seekAmount);
+        seek(newTime);
+      }, 50); // 50ms interval
+    }, 300); // 300ms hold threshold
+  };
+
+  const handleForwardPointerUp = () => {
+    // Clear timeout if still waiting
+    if (forwardPointerTimeoutRef.current !== null) {
+      clearTimeout(forwardPointerTimeoutRef.current);
+      forwardPointerTimeoutRef.current = null;
+      
+      // Was a short press, jump 5 seconds forward
+      const currentTime = playbackState.currentTime;
+      const duration = playbackState.duration;
+      const newTime = Math.min(duration, currentTime + 5);
+      seek(newTime);
+    }
+    
+    // Clear interval if in continuous mode
+    if (forwardSeekIntervalRef.current !== null) {
+      clearInterval(forwardSeekIntervalRef.current);
+      forwardSeekIntervalRef.current = null;
+    }
+    
+    forwardStartTimeRef.current = null;
+  };
+
   const hasLoadedTracks = tracks.length > 0 && tracks.every((t) => t.file !== null);
 
   return (
@@ -344,14 +391,26 @@ const BottomControlBar = () => {
           >
             <FastRewind />
           </IconButton>
+          <IconButton
+            size="small"
+            onPointerDown={handleForwardPointerDown}
+            onPointerUp={handleForwardPointerUp}
+            onPointerLeave={handleForwardPointerUp}
+            onPointerCancel={handleForwardPointerUp}
+            disabled={!hasLoadedTracks}
+            aria-label={t('controls.forward5')}
+            sx={{ touchAction: 'none' }}
+          >
+            <FastForward />
+          </IconButton>
           <Stack direction="row" spacing={1} alignItems="center" minWidth={120}>
             <Typography variant="body2">
               {formatTime(currentTime)}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
               /
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color="text.secondary" sx={{ display: { xs: 'none', sm: 'block' } }}>
               {formatTime(playbackState.duration)}
             </Typography>
           </Stack>

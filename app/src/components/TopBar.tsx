@@ -4,6 +4,7 @@ import {
   Box,
   Button,
   IconButton,
+  LinearProgress,
   ListItemIcon,
   ListItemText,
   Menu,
@@ -27,6 +28,7 @@ import {
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { StemuxIcon } from './StemuxIcon';
+import { usePlaybackTime } from '../hooks/usePlaybackTime';
 
 interface TopBarProps {
   hasLoadedTracks: boolean;
@@ -36,6 +38,8 @@ interface TopBarProps {
   prefersDarkMode: boolean;
   isMobile: boolean;
   tracksCount: number;
+  isPlaying: boolean;
+  duration: number;
   onZoomOut: () => void;
   onZoomIn: () => void;
   onZoomChange: (value: number) => void;
@@ -56,6 +60,8 @@ const TopBar = ({
   prefersDarkMode,
   isMobile,
   tracksCount,
+  isPlaying,
+  duration,
   onZoomOut,
   onZoomIn,
   onZoomChange,
@@ -69,6 +75,10 @@ const TopBar = ({
 }: TopBarProps) => {
   const { t } = useTranslation();
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
+
+  // Use live playback time hook (updates every 100ms)
+  const currentTime = usePlaybackTime();
+  const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   return (
     <AppBar position="fixed" elevation={2} color="default" sx={{ bgcolor: 'background.paper' }}>
@@ -245,6 +255,20 @@ const TopBar = ({
           </MenuItem>
         </Menu>
       </Toolbar>
+
+      {/* Progress bar */}
+      <LinearProgress
+        variant="determinate"
+        value={progressPercent}
+        sx={{
+          height: 3,
+          backgroundColor: 'transparent',
+          '& .MuiLinearProgress-bar': {
+            backgroundColor: isPlaying ? 'primary.light' : 'action.disabled',
+            transition: 'none', // Remove animation for instant updates
+          },
+        }}
+      />
     </AppBar>
   );
 };

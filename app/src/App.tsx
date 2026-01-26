@@ -65,7 +65,7 @@ const ZOOM_PRESETS = [
 
 function App() {
     const {t} = useTranslation();
-    const {tracks, initAudioContext, loopState, toggleLoopEditMode, zoomLevel, removeAllTracks, reorderTracks} = useAudioStore();
+    const {tracks, initAudioContext, loopState, toggleLoopEditMode, zoomLevel, removeAllTracks, reorderTracks, playbackState} = useAudioStore();
 
     // DND Kit sensors
     const sensors = useSensors(
@@ -397,6 +397,8 @@ function App() {
                     prefersDarkMode={prefersDarkMode}
                     isMobile={isMobile}
                     tracksCount={tracks.length}
+                    isPlaying={playbackState.isPlaying}
+                    duration={playbackState.duration}
                     onZoomOut={zoomOut}
                     onZoomIn={zoomIn}
                     onZoomChange={handleZoomChange}

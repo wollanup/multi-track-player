@@ -46,7 +46,7 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
     if (!containerRef.current || !track.file) return;
 
     const waveColor = track.color;
-    const progressColor = track.color + '80'; // Add 50% opacity
+    const progressColor = track.color + '40'; // Add 50% opacity
 
     // Create plugins array
     const plugins = [];
@@ -61,8 +61,8 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
     if (waveformMinimap) {
       minimapInstance = Minimap.create({
         height: 20,
-        waveColor: theme.palette.grey[400],
-        progressColor: theme.palette.grey[600],
+        waveColor: theme.palette.mode === 'dark' ? theme.palette.grey[300] : theme.palette.grey[500],
+        progressColor: theme.palette.mode === 'dark' ? theme.palette.grey[700] : theme.palette.grey[300],
       });
       plugins.push(minimapInstance);
     }
@@ -80,6 +80,7 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
       } : {}),
       height: 60,
       normalize: waveformNormalize,
+      // hideScrollbar: true,
       interact: true,
       autoScroll: true,
       autoCenter: true,
@@ -352,7 +353,7 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
     const waveColor = track.isMuted ? theme.palette.action.disabled : track.color;
     const progressColor = track.isMuted
       ? theme.palette.action.disabled
-      : track.color + '80';
+      : track.color + '40';
 
     wavesurferRef.current.setOptions({ waveColor, progressColor });
   }, [track.isMuted, track.color, theme, isReady]);

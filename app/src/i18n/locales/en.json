@@ -4,6 +4,7 @@
     "noTracksTitle": "No tracks loaded"
   },
   "controls": {
+    "forward5": "Forward 5 seconds (hold for continuous)",
     "masterVolume": "Master volume",
     "pause": "Pause",
     "play": "Play",

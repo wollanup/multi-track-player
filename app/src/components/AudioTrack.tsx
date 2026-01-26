@@ -14,7 +14,7 @@ import {
   TextField,
   Typography
 } from '@mui/material';
-import {Close, DragIndicator, Edit, Headset, VolumeOff, VolumeUp, ExpandMore} from '@mui/icons-material';
+import {Close, DragIndicator, Headset, VolumeOff, VolumeUp, ExpandMore} from '@mui/icons-material';
 import {useTranslation} from 'react-i18next';
 import {useAudioStore} from '../hooks/useAudioStore';
 import {useThrottle} from '../hooks/useThrottle';
@@ -277,11 +277,6 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
             >
               {track.name.replace('.mp3', '')}
             </Typography>
-          )}
-          {!isEditingName && (
-            <IconButton size="small" onClick={handleStartEditName} sx={{ opacity: 0.6, ml: 0.5 }}>
-              <Edit fontSize="small" />
-            </IconButton>
           )}
           
           <Box sx={{ flexGrow: 1 }} />
