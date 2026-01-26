@@ -28,13 +28,13 @@ const Section = ({ title, children }: { title: string; children: React.ReactNode
   </Box>
 );
 
-const ControlItem = ({ 
-  icon, 
-  title, 
-  description 
-}: { 
-  icon: React.ReactNode; 
-  title: string; 
+const ControlItem = ({
+  icon,
+  title,
+  description
+}: {
+  icon: React.ReactNode;
+  title: string;
   description: string;
 }) => (
   <Stack direction="row" spacing={2} mb={2} alignItems="flex-start">
@@ -65,7 +65,7 @@ const ControlItem = ({
 
 const HelpModal = ({ open, onClose }: HelpModalProps) => {
   const { t } = useTranslation();
-  
+
   return (
     <Dialog
       open={open}
@@ -245,9 +245,6 @@ const HelpModal = ({ open, onClose }: HelpModalProps) => {
             </Typography>
             <Typography variant="body2">
               💾 {t('help.sections.tips.tip2')}
-            </Typography>
-            <Typography variant="body2">
-              🎯 {t('help.sections.tips.tip3')}
             </Typography>
             <Typography variant="body2">
               🖱️ {t('help.sections.tips.tip4')}

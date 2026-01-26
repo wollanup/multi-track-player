@@ -67,8 +67,12 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
   const [isDraggingVolume, setIsDraggingVolume] = useState(false);
   const [dragVolume, setDragVolume] = useState(track.volume * 100);
   
-  // Collapsed state
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  // Collapsed state - synced with store
+  const isCollapsed = track.isCollapsed ?? false;
+  
+  const handleToggleCollapsed = () => {
+    updateTrack(track.id, { isCollapsed: !isCollapsed });
+  };
 
   // Throttled volume update (max 20 updates/sec = 50ms)
   const throttledSetVolume = useThrottle((id: string, volume: number) => {
@@ -283,7 +287,7 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
           
           <IconButton 
             size="small" 
-            onClick={() => setIsCollapsed(!isCollapsed)}
+            onClick={handleToggleCollapsed}
             sx={{ 
               opacity: 0.6,
               transform: isCollapsed ? 'rotate(0deg)' : 'rotate(180deg)',

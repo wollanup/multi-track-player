@@ -19,6 +19,7 @@ const saveTrackSettings = (tracks: AudioTrack[]) => {
     isMuted: t.isMuted,
     isSolo: t.isSolo,
     color: t.color,
+    isCollapsed: t.isCollapsed,
   }));
   localStorage.setItem('practice-tracks-settings', JSON.stringify(settings));
 };

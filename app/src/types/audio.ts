@@ -7,6 +7,7 @@ export interface AudioTrack {
   isSolo: boolean;
   color: string;
   isLoading?: boolean; // True during file import/loading
+  isCollapsed?: boolean; // Track expanded/collapsed state
 }
 
 export interface PlaybackState {
