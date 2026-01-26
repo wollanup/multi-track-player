@@ -57,6 +57,7 @@ export interface AudioStore {
   removeTrack: (id: string) => void;
   removeAllTracks: () => void;
   updateTrack: (id: string, updates: Partial<AudioTrack>) => void;
+  reorderTracks: (fromIndex: number, toIndex: number) => void;
   setVolume: (id: string, volume: number) => void;
   toggleMute: (id: string) => void;
   toggleSolo: (id: string) => void;

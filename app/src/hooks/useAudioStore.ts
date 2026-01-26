@@ -263,6 +263,14 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
     saveTrackSettings(newTracks);
   },
 
+  reorderTracks: (fromIndex: number, toIndex: number) => {
+    const tracks = [...get().tracks];
+    const [movedTrack] = tracks.splice(fromIndex, 1);
+    tracks.splice(toIndex, 0, movedTrack);
+    set({ tracks });
+    saveTrackSettings(tracks);
+  },
+
   setVolume: (id: string, volume: number) => {
     get().updateTrack(id, { volume });
   },

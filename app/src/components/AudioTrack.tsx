@@ -14,12 +14,14 @@ import {
   TextField,
   Typography
 } from '@mui/material';
-import {Close, Edit, Headset, VolumeOff, VolumeUp,} from '@mui/icons-material';
+import {Close, DragIndicator, Edit, Headset, VolumeOff, VolumeUp, ExpandMore} from '@mui/icons-material';
 import {useTranslation} from 'react-i18next';
 import {useAudioStore} from '../hooks/useAudioStore';
 import {useThrottle} from '../hooks/useThrottle';
 import WaveformDisplay from './WaveformDisplay';
 import type {AudioTrack as AudioTrackType} from '../types/audio';
+import {useSortable} from '@dnd-kit/sortable';
+import {CSS} from '@dnd-kit/utilities';
 
 interface AudioTrackProps {
   track: AudioTrackType;
@@ -39,6 +41,21 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
     loopState,
 } = useAudioStore();
 
+  // DND Kit sortable
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({id: track.id});
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
   // Check if any track has solo enabled
   const hasSolo = tracks.some((t) => t.isSolo);
   const isInactive = hasSolo && !track.isSolo;
@@ -49,6 +66,9 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
   // Volume state: use drag value when dragging, otherwise sync with track.volume
   const [isDraggingVolume, setIsDraggingVolume] = useState(false);
   const [dragVolume, setDragVolume] = useState(track.volume * 100);
+  
+  // Collapsed state
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   // Throttled volume update (max 20 updates/sec = 50ms)
   const throttledSetVolume = useThrottle((id: string, volume: number) => {
@@ -156,18 +176,22 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
   };
 
   return (
-    <Paper
-      elevation={2}
-      sx={{
-        p: 2,
-        mb: 1.5,
-        borderLeft: `4px solid ${track.isMuted ? 'rgba(128, 128, 128, 0.3)' : track.color}`,
-        border: loopState.editMode ? '1px solid' : undefined,
-        borderColor: loopState.editMode ? 'warning.main' : undefined,
-        opacity: track.isMuted || isInactive ? 0.5 : 1,
-        transition: 'opacity 0.2s, border 0.2s ease-in-out',
-      }}
-    >
+    <Box ref={setNodeRef} style={style} sx={{ position: 'relative' }}>
+      <Paper
+        data-track-index={track.id}
+        elevation={2}
+        sx={{
+          p: 2,
+          mb: 1.5,
+          borderLeft: `4px solid ${track.isMuted ? 'rgba(128, 128, 128, 0.3)' : track.color}`,
+          border: loopState.editMode ? '1px solid' : undefined,
+          borderColor: loopState.editMode ? 'warning.main' : undefined,
+          opacity: track.isMuted || isInactive ? 0.5 : 1,
+          transition: isDragging ? 'none' : 'opacity 0.2s, border 0.2s ease-in-out',
+          boxShadow: isDragging ? 8 : 2,
+          zIndex: isDragging ? 1000 : 'auto',
+        }}
+      >
       {track.isLoading ? (
         // Loading state - minimal skeleton
         <Stack spacing={1}>
@@ -201,9 +225,25 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
         </Stack>
       ) : (
         // Normal state
-        <Stack spacing={0}>
+        <Box>
         {/* Header */}
-        <Box display="flex" alignItems="center" justifyContent="space-between" mb={1.5} gap={1}>
+        <Box display="flex" alignItems="center" justifyContent="space-between" gap={1}>
+          {/* Drag handle */}
+          <IconButton
+            size="small"
+            {...attributes}
+            {...listeners}
+            sx={{
+              cursor: isDragging ? 'grabbing' : 'grab',
+              touchAction: 'none',
+              opacity: 0.6,
+              '&:hover': { opacity: 1 },
+            }}
+            aria-label="Drag to reorder"
+          >
+            <DragIndicator fontSize="small" />
+          </IconButton>
+
           {isEditingName ? (
             <TextField
               value={editedName}
@@ -218,19 +258,18 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
               }}
               autoFocus
               size="small"
-              fullWidth
               variant="standard"
-              sx={{ flex: 1 }}
+              sx={{ maxWidth: 300 }}
             />
           ) : (
             <Typography
               variant="subtitle1"
               fontWeight={600}
               noWrap
-              flex={1}
               onClick={handleStartEditName}
               sx={{
                 cursor: 'pointer',
+                maxWidth: 300,
                 '&:hover': {
                   color: 'primary.main',
                 },
@@ -240,22 +279,38 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
             </Typography>
           )}
           {!isEditingName && (
-            <IconButton size="small" onClick={handleStartEditName} sx={{ opacity: 0.6 }}>
+            <IconButton size="small" onClick={handleStartEditName} sx={{ opacity: 0.6, ml: 0.5 }}>
               <Edit fontSize="small" />
             </IconButton>
           )}
+          
+          <Box sx={{ flexGrow: 1 }} />
+          
+          <IconButton 
+            size="small" 
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            sx={{ 
+              opacity: 0.6,
+              transform: isCollapsed ? 'rotate(0deg)' : 'rotate(180deg)',
+              transition: 'transform 0.2s',
+            }}
+            aria-label={isCollapsed ? t('track.expand') : t('track.collapse')}
+          >
+            <ExpandMore fontSize="small" />
+          </IconButton>
           <IconButton size="small" onClick={() => setDeleteDialogOpen(true)}>
             <Close fontSize="small" />
           </IconButton>
         </Box>
 
+        {/* Waveform and controls - hidden when collapsed */}
         {/* Waveform */}
-        <Box mb={1.5} ref={waveformContainerRef} sx={{ position: 'relative' }}>
+        <Box ref={waveformContainerRef} sx={{ position: 'relative', mt: 1.5, mb: 1.5, display: isCollapsed ? 'none' : 'block' }}>
           <WaveformDisplay track={track} trackId={track.id} />
         </Box>
 
         {/* Controls */}
-        <Box>
+        <Box sx={{ display: isCollapsed ? 'none' : 'block' }}>
           <Stack direction="row" spacing={2} alignItems="center">
           {/* Solo */}
           <IconButton
@@ -313,7 +368,7 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
           </Box>
         </Stack>
         </Box>
-      </Stack>
+      </Box>
       )}
 
       {/* Delete Confirmation Dialog */}
@@ -344,6 +399,7 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
         </DialogActions>
       </Dialog>
     </Paper>
+    </Box>
   );
 };
 

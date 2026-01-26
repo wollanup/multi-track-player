@@ -22,6 +22,20 @@ import {
     FormControlLabel,
     FormControl
 } from '@mui/material';
+import {
+    DndContext,
+    closestCenter,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+    SortableContext,
+    sortableKeyboardCoordinates,
+    verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
 import {restoreTracks, useAudioStore} from './hooks/useAudioStore';
 import {useSyncWaveformScroll} from './hooks/useSyncWaveformScroll';
 import FileUploader from './components/FileUploader';
@@ -51,9 +65,32 @@ const ZOOM_PRESETS = [
 
 function App() {
     const {t} = useTranslation();
-    const {tracks, initAudioContext, loopState, toggleLoopEditMode, zoomLevel, removeAllTracks} = useAudioStore();
+    const {tracks, initAudioContext, loopState, toggleLoopEditMode, zoomLevel, removeAllTracks, reorderTracks} = useAudioStore();
 
-    // Sync waveform scroll across all tracks (for touch gestures)
+    // DND Kit sensors
+    const sensors = useSensors(
+        useSensor(PointerSensor),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
+
+    // Handle drag end
+    const handleDragEnd = (event: DragEndEvent) => {
+        const {active, over} = event;
+
+        if (over && active.id !== over.id) {
+            const oldIndex = tracks.findIndex(t => t.id === active.id);
+            const newIndex = tracks.findIndex(t => t.id === over.id);
+            reorderTracks(oldIndex, newIndex);
+        }
+    };
+
+    // Drag and drop state for track reordering - REMOVED, using dnd-kit now
+    // const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+    // const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+    // Handle window-wide drag and drop for audio files
     useSyncWaveformScroll(zoomLevel > 0);
 
     // Slider value derivation: derive from zoomLevel UNLESS user is actively dragging
@@ -526,9 +563,23 @@ function App() {
                                 </Alert>
                             </Collapse>
 
-                            {tracks.map((track) => (
-                                <AudioTrack key={track.id} track={track}/>
-                            ))}
+                            <DndContext
+                                sensors={sensors}
+                                collisionDetection={closestCenter}
+                                onDragEnd={handleDragEnd}
+                            >
+                                <SortableContext
+                                    items={tracks.map(t => t.id)}
+                                    strategy={verticalListSortingStrategy}
+                                >
+                                    {tracks.map((track) => (
+                                        <AudioTrack
+                                            key={track.id}
+                                            track={track}
+                                        />
+                                    ))}
+                                </SortableContext>
+                            </DndContext>
                             {/* File uploader at bottom when tracks exist */}
                             <FileUploader isDraggingWindow={isDraggingFile}/>
                         </Box>

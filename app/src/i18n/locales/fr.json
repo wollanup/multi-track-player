@@ -135,9 +135,11 @@
   },
   "track": {
     "cancelButton": "Annuler",
+    "collapse": "Réduire",
     "deleteConfirmButton": "Supprimer",
     "deleteConfirmMessage": "Êtes-vous sûr de vouloir supprimer cette piste ? Cette action est irréversible.",
     "deleteConfirmTitle": "Supprimer la piste ?",
+    "expand": "Agrandir",
     "importing": "Import du fichier en cours...",
     "loading": "Chargement..."
   },
