@@ -15,6 +15,7 @@ import {
   Typography,
 } from '@mui/material';
 import {
+  Album,
   DarkMode,
   DeleteSweep,
   Edit,
@@ -23,12 +24,16 @@ import {
   LightMode,
   MoreVert,
   Refresh,
+  Settings,
   ZoomIn,
   ZoomOut,
+  KeyboardArrowDown,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { StemuxIcon } from './StemuxIcon';
 import { usePlaybackTime } from '../hooks/usePlaybackTime';
+import { useAudioStore } from '../hooks/useAudioStore';
+import type { PieceWithStats } from '../types/audio';
 
 interface TopBarProps {
   hasLoadedTracks: boolean;
@@ -50,6 +55,7 @@ interface TopBarProps {
   onOpenThemeDialog: () => void;
   onOpenSettings: () => void;
   onOpenDeleteAllDialog: () => void;
+  onOpenPiecesManager: () => void;
 }
 
 const TopBar = ({
@@ -72,13 +78,42 @@ const TopBar = ({
   onOpenThemeDialog,
   onOpenSettings,
   onOpenDeleteAllDialog,
+  onOpenPiecesManager,
 }: TopBarProps) => {
   const { t } = useTranslation();
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const [piecesMenuAnchorEl, setPiecesMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const [recentPieces, setRecentPieces] = useState<PieceWithStats[]>([]);
+  
+  const { getRecentPieces, getCurrentPiece, loadPiece, currentPieceName } = useAudioStore();
 
   // Use live playback time hook (updates every 100ms)
   const currentTime = usePlaybackTime();
   const progressPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  // Load pieces menu data when opening
+  const handleOpenPiecesMenu = async (event: React.MouseEvent<HTMLElement>) => {
+    setPiecesMenuAnchorEl(event.currentTarget);
+    
+    try {
+      const [recent, current] = await Promise.all([
+        getRecentPieces(10),
+        getCurrentPiece(),
+      ]);
+      setRecentPieces(recent.filter(p => p.id !== current?.id));
+    } catch (error) {
+      console.error('Failed to load pieces menu:', error);
+    }
+  };
+
+  const handleLoadPiece = async (id: string) => {
+    setPiecesMenuAnchorEl(null);
+    try {
+      await loadPiece(id);
+    } catch (error) {
+      console.error('Failed to load piece:', error);
+    }
+  };
 
   return (
     <AppBar position="fixed" elevation={2} color="default" sx={{ bgcolor: 'background.paper' }}>
@@ -86,9 +121,72 @@ const TopBar = ({
         <Box sx={{ mr: 2, display: 'flex', alignItems: 'center' }}>
           <StemuxIcon size={28} />
         </Box>
-        <Typography variant="body1" component="div">
-          Stemux
-        </Typography>
+        
+        {/* Title with pieces menu */}
+        {currentPieceName ? (
+          <>
+            <Button
+              color="inherit"
+              onClick={handleOpenPiecesMenu}
+              endIcon={<KeyboardArrowDown />}
+              sx={{ 
+                textTransform: 'none',
+                p: isMobile ? 0.5 : 1,
+              }}
+            >
+              <Typography variant="body1" component="span">
+                Stemux
+              </Typography>
+            </Button>
+            <Menu
+              anchorEl={piecesMenuAnchorEl}
+              open={Boolean(piecesMenuAnchorEl)}
+              onClose={() => setPiecesMenuAnchorEl(null)}
+              anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+              transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+            >
+              {/* Current piece name (mobile only) */}
+              {isMobile && (
+                <MenuItem disabled>
+                  <ListItemText 
+                    primary={currentPieceName}
+                    slotProps={{ primary: { sx: { fontWeight: 'bold' } } }}
+                  />
+                </MenuItem>
+              )}
+              
+              <MenuItem
+                onClick={() => {
+                  setPiecesMenuAnchorEl(null);
+                  onOpenPiecesManager();
+                }}
+              >
+                <ListItemIcon>
+                  <Settings fontSize="small" />
+                </ListItemIcon>
+                <ListItemText>{t('menu.pieces')}</ListItemText>
+              </MenuItem>
+              
+              {recentPieces.length > 0 && <MenuItem disabled sx={{ opacity: 0.6 }}>
+                <ListItemText
+                  primary={t('pieces.recentPieces')}
+                  slotProps={{ primary: { variant: 'caption', color: 'text.secondary' } }}
+                />
+              </MenuItem>}
+              
+              {recentPieces.map((piece) => (
+                <MenuItem key={piece.id} onClick={() => handleLoadPiece(piece.id)}>
+                  <ListItemText primary={piece.name} />
+                </MenuItem>
+              ))}
+            </Menu>
+          </>
+        ) : (
+          <Typography variant="body1" component="div">
+            Stemux
+          </Typography>
+        )}
+
         <Box sx={{ flexGrow: 1 }} />
 
         {/* Zoom controls */}
@@ -171,6 +269,18 @@ const TopBar = ({
           anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
           transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         >
+          <MenuItem
+            onClick={() => {
+              setMenuAnchorEl(null);
+              onOpenPiecesManager();
+            }}
+          >
+            <ListItemIcon>
+              <Album fontSize="small" />
+            </ListItemIcon>
+            <ListItemText>{t('menu.pieces')}</ListItemText>
+          </MenuItem>
+
           <MenuItem
             onClick={() => {
               setMenuAnchorEl(null);

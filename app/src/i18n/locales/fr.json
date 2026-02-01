@@ -62,6 +62,10 @@
       "welcome": {
         "description": "Stemux est un lecteur audio multi-pistes conçu pour les musiciens qui souhaitent s'exercer avec des stems isolées. Chargez vos pistes, contrôlez les volumes indépendamment et créez des boucles pour une pratique ciblée.",
         "title": "Bienvenue sur Stemux !"
+      },
+      "pieces": {
+        "title": "Gestion des morceaux",
+        "description": "Organisez votre travail en créant plusieurs morceaux. Chaque morceau garde ses pistes, ses boucles et ses réglages séparément. Cliquez sur \"Stemux ▼\" en haut pour accéder au menu : créer, renommer, supprimer ou basculer entre vos morceaux."
       }
     },
     "title": "Guide d'utilisation"
@@ -92,6 +96,7 @@
     "deleteAllTracks": "Supprimer toutes les pistes",
     "interface": "Interface",
     "lightMode": "Mode clair",
+    "pieces": "Gérer les morceaux",
     "refresh": "Recharger l'application",
     "theme": "Thème",
     "themeDialog": {
@@ -102,6 +107,33 @@
       "title": "Choisir le thème"
     },
     "title": "Menu"
+  },
+  "pieces": {
+    "title": "Gérer les morceaux",
+    "recentPieces": "Morceaux récents",
+    "currentPiece": "Morceau actuel",
+    "newPiece": "Nouveau morceau",
+    "noPieces": "Aucun autre morceau",
+    "duration": "Durée",
+    "tracks": "{{count}} piste",
+    "tracks_other": "{{count}} pistes",
+    "size": "Taille",
+    "delete": "Supprimer",
+    "deleteConfirmTitle": "Supprimer le morceau ?",
+    "deleteConfirmMessage": "Ceci supprimera définitivement le morceau \"{{name}}\" et toutes ses pistes ({{count}}). Cette action est irréversible.",
+    "deleteConfirmButton": "Supprimer",
+    "cancelButton": "Annuler",
+    "closeButton": "Fermer",
+    "globalStats": "Statistiques globales",
+    "totalSize": "Stockage total utilisé",
+    "deleteAll": "Tout supprimer",
+    "deleteAllConfirmTitle": "Supprimer tous les morceaux ?",
+    "deleteAllConfirmMessage": "Ceci supprimera définitivement TOUS les morceaux et leurs pistes. Cette action est irréversible.",
+    "deleteAllConfirmButton": "Tout supprimer",
+    "renameDialogTitle": "Renommer le morceau",
+    "renameDialogLabel": "Nom du morceau",
+    "renameDialogCancel": "Annuler",
+    "renameDialogSave": "Enregistrer"
   },
   "pwa": {
     "reload": "Recharger",
@@ -143,6 +175,12 @@
     "expand": "Agrandir",
     "importing": "Import du fichier en cours...",
     "loading": "Chargement..."
+  },
+  "units": {
+    "bytes": "o",
+    "kb": "Ko",
+    "mb": "Mo",
+    "gb": "Go"
   },
   "upload": {
     "description": "Déposez des fichiers audio ici ou cliquez pour sélectionner",

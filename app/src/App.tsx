@@ -45,6 +45,7 @@ import MarkersPanel from './components/MarkersPanel';
 import {PWAUpdatePrompt} from './components/PWAUpdatePrompt';
 import HelpModal from './components/HelpModal';
 import SettingsUI from './components/SettingsUI';
+import PiecesManager from './components/PiecesManager';
 import {useTranslation} from 'react-i18next';
 import {logger} from './utils/logger';
 import TopBar from "./components/TopBar.tsx";
@@ -152,6 +153,7 @@ function App() {
     const [settingsModalOpen, setSettingsModalOpen] = useState(false);
     const [themeDialogOpen, setThemeDialogOpen] = useState(false);
     const [deleteAllDialogOpen, setDeleteAllDialogOpen] = useState(false);
+    const [piecesManagerOpen, setPiecesManagerOpen] = useState(false);
     const [showEditModeAlert, setShowEditModeAlert] = useState(() => {
         return localStorage.getItem('hideEditModeAlert') !== 'true';
     });
@@ -412,11 +414,14 @@ function App() {
                     onOpenThemeDialog={() => setThemeDialogOpen(true)}
                     onOpenSettings={() => setSettingsModalOpen(true)}
                     onOpenDeleteAllDialog={() => setDeleteAllDialogOpen(true)}
+                    onOpenPiecesManager={() => setPiecesManagerOpen(true)}
                 />
 
 
                 {/* Help Modal */}
                 <HelpModal open={helpModalOpen} onClose={() => setHelpModalOpen(false)}/>
+                <SettingsUI open={settingsModalOpen} onClose={() => setSettingsModalOpen(false)}/>
+                <PiecesManager open={piecesManagerOpen} onClose={() => setPiecesManagerOpen(false)} />
 
                 {/* Interface Settings Modal */}
                 <SettingsUI open={settingsModalOpen} onClose={() => setSettingsModalOpen(false)}/>

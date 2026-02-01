@@ -96,6 +96,15 @@ const HelpModal = ({ open, onClose }: HelpModalProps) => {
 
         <Divider sx={{ my: 3 }} />
 
+        {/* Pieces Management */}
+        <Section title={t('help.sections.pieces.title')}>
+          <Typography variant="body2" color="text.secondary">
+            {t('help.sections.pieces.description')}
+          </Typography>
+        </Section>
+
+        <Divider sx={{ my: 3 }} />
+
         {/* Getting Started */}
         <Section title={t('help.sections.basics.title')}>
           <Typography variant="subtitle1" fontWeight={600} gutterBottom>

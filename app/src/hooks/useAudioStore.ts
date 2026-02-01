@@ -1,6 +1,21 @@
 import { create } from 'zustand';
-import type { AudioStore, AudioTrack, Marker, Loop } from '../types/audio';
-import { saveAudioFile, deleteAudioFile, getAllAudioFiles } from '../utils/indexedDB';
+import type { AudioStore, AudioTrack, Piece, PieceSettings, PieceWithStats } from '../types/audio';
+import { 
+  saveAudioFile, 
+  deleteAudioFile, 
+  getAllAudioFiles,
+  savePiece,
+  getPiece,
+  getAllPieces,
+  deletePiece as deletePieceDB,
+  savePieceSettings,
+  getPieceSettings,
+  deletePieceSettings,
+  clearAllPieces,
+  clearAllPieceSettings,
+  clearAllAudioFiles,
+  getAudioFileSize,
+} from '../utils/indexedDB';
 import type WaveSurfer from 'wavesurfer.js';
 import {logger} from '../utils/logger';
 
@@ -10,52 +25,60 @@ const COLORS = [
 
 ];
 
-// Save track settings to localStorage (no perf impact - called only on user actions)
-const saveTrackSettings = (tracks: AudioTrack[]) => {
-  const settings = tracks.map(t => ({
-    id: t.id,
-    name: t.name,
-    volume: t.volume,
-    isMuted: t.isMuted,
-    isSolo: t.isSolo,
-    color: t.color,
-    isCollapsed: t.isCollapsed,
-  }));
-  localStorage.setItem('practice-tracks-settings', JSON.stringify(settings));
+// Save track settings to piece settings (no longer localStorage)
+const saveTrackSettingsToPiece = async (pieceId: string, tracks: AudioTrack[], loopState: any, playbackRate: number, masterVolume: number) => {
+  const settings: PieceSettings = {
+    trackSettings: tracks.map(t => ({
+      id: t.id,
+      name: t.name,
+      volume: t.volume,
+      isMuted: t.isMuted,
+      isSolo: t.isSolo,
+      color: t.color,
+      isCollapsed: t.isCollapsed,
+    })),
+    loopState: {
+      markers: loopState.markers,
+      loops: loopState.loops,
+      activeLoopId: loopState.activeLoopId,
+    },
+    playbackRate,
+    masterVolume,
+  };
+  await savePieceSettings(pieceId, settings);
 };
 
-// Load track settings from localStorage
+// Legacy: Load track settings from localStorage (for migration)
 export const loadTrackSettings = () => {
   const stored = localStorage.getItem('practice-tracks-settings');
   return stored ? JSON.parse(stored) : [];
 };
 
-// Save playback rate to localStorage
-const savePlaybackRate = (rate: number) => {
-  localStorage.setItem('practice-tracks-playback-rate', rate.toString());
-};
-
-// Load playback rate from localStorage
+// Legacy loaders for migration
 const loadPlaybackRate = () => {
   const stored = localStorage.getItem('practice-tracks-playback-rate');
   return stored ? parseFloat(stored) : 1.0;
 };
 
-// Load current playback position from localStorage
-const loadCurrentPosition = () => {
-  // Always start at 0 (beginning or loop start if loop enabled)
-  return 0;
-};
-
-// Save master volume to localStorage
-const saveMasterVolume = (volume: number) => {
-  localStorage.setItem('practice-tracks-master-volume', volume.toString());
-};
-
-// Load master volume from localStorage
 const loadMasterVolume = () => {
   const stored = localStorage.getItem('practice-tracks-master-volume');
   return stored ? parseFloat(stored) : 1.0;
+};
+
+const loadLoopV2State = () => {
+  const stored = localStorage.getItem('practice-tracks-loop-v2');
+  if (stored) {
+    try {
+      return JSON.parse(stored);
+    } catch (e) {
+      console.warn('⚠️ Failed to parse loop v2 state:', e);
+    }
+  }
+  return {
+    markers: [],
+    loops: [],
+    activeLoopId: null,
+  };
 };
 
 // WaveSurfer instances registry (outside Zustand to avoid re-renders)
@@ -104,31 +127,28 @@ const saveWaveformMinimap = (minimap: boolean) => {
   localStorage.setItem('waveform-minimap', minimap.toString());
 };
 
-// Save loop v2 state (markers + loops) to localStorage
-const saveLoopV2State = (markers: Marker[], loops: Loop[], activeLoopId: string | null) => {
-  const state = {
-    markers,
-    loops,
-    activeLoopId,
-  };
-  localStorage.setItem('practice-tracks-loop-v2', JSON.stringify(state));
+// Current piece ID
+const loadCurrentPieceId = () => {
+  return localStorage.getItem('current-piece-id');
 };
 
-// Load loop v2 state from localStorage
-const loadLoopV2State = () => {
-  const stored = localStorage.getItem('practice-tracks-loop-v2');
-  if (stored) {
-    try {
-      return JSON.parse(stored);
-    } catch (e) {
-      console.warn('⚠️ Failed to parse loop v2 state:', e);
-    }
+const saveCurrentPieceId = (id: string | null) => {
+  if (id) {
+    localStorage.setItem('current-piece-id', id);
+  } else {
+    localStorage.removeItem('current-piece-id');
   }
-  return {
-    markers: [],
-    loops: [],
-    activeLoopId: null,
-  };
+};
+
+// Generate piece name from date
+const generatePieceName = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}_${hours}-${minutes}`;
 };
 
 export // Global flag to prevent feedback loops during sync
@@ -138,22 +158,24 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
   tracks: [],
   playbackState: {
     isPlaying: false,
-    currentTime: loadCurrentPosition(),
+    currentTime: 0,
     duration: 0,
     playbackRate: loadPlaybackRate(),
   },
   loopState: {
     ...loadLoopV2State(),
-    editMode: false, // Always start in standard mode
+    editMode: false,
   },
   masterVolume: loadMasterVolume(),
   audioContext: null,
   showLoopPanel: false,
-  zoomLevel: 0, // Direct px/sec value - 0 means fit to width without scrolling
+  zoomLevel: 0,
   waveformStyle: loadWaveformStyle() as 'modern' | 'classic',
   waveformNormalize: loadWaveformNormalize(),
   waveformTimeline: loadWaveformTimeline(),
   waveformMinimap: loadWaveformMinimap(),
+  currentPieceId: loadCurrentPieceId(),
+  currentPieceName: '',
 
   initAudioContext: () => {
     const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
@@ -161,11 +183,17 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
   },
 
   addTrack: async (file: File) => {
-    const { tracks, pause, seek } = get();
+    const { tracks, pause, seek, currentPieceId, createPiece } = get();
 
     if (tracks.length >= 8) {
       alert('Maximum 8 tracks allowed');
       return;
+    }
+
+    // Create piece if none exists
+    let pieceId = currentPieceId;
+    if (!pieceId) {
+      pieceId = await createPiece(generatePieceName());
     }
 
     // Pause and reset position when adding a track
@@ -183,16 +211,33 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
       isMuted: false,
       isSolo: false,
       color,
-      isLoading: true, // Mark as loading during import
+      isLoading: true,
     };
 
     const newTracks = [...tracks, newTrack];
     set({ tracks: newTracks });
-    saveTrackSettings(newTracks);
 
     // Save file to IndexedDB
     try {
       await saveAudioFile(id, file);
+      
+      // Update piece with new track ID
+      const piece = await getPiece(pieceId!);
+      if (piece) {
+        piece.trackIds = [...piece.trackIds, id];
+        piece.updatedAt = Date.now();
+        await savePiece(piece);
+      }
+      
+      // Save settings to piece
+      const state = get();
+      await saveTrackSettingsToPiece(
+        pieceId!,
+        state.tracks.map(t => t.id === id ? { ...t, isLoading: false } : t),
+        state.loopState,
+        state.playbackState.playbackRate,
+        state.masterVolume
+      );
       
       // Mark as loaded
       set((state) => ({
@@ -213,6 +258,8 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
   },
 
   removeTrack: async (id: string) => {
+    const { currentPieceId } = get();
+    
     // Delete from IndexedDB
     try {
       await deleteAudioFile(id);
@@ -225,11 +272,29 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
     set({
       tracks: newTracks,
     });
-    saveTrackSettings(newTracks);
+    
+    // Update piece
+    if (currentPieceId) {
+      const piece = await getPiece(currentPieceId);
+      if (piece) {
+        piece.trackIds = piece.trackIds.filter(tid => tid !== id);
+        piece.updatedAt = Date.now();
+        await savePiece(piece);
+      }
+      
+      const state = get();
+      await saveTrackSettingsToPiece(
+        currentPieceId,
+        newTracks,
+        state.loopState,
+        state.playbackState.playbackRate,
+        state.masterVolume
+      );
+    }
   },
 
   removeAllTracks: async () => {
-    const { tracks, pause, seek } = get();
+    const { tracks, pause, seek, currentPieceId } = get();
     
     // Pause and reset position
     pause();
@@ -242,7 +307,7 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
       console.error('Failed to delete audio files:', error);
     }
 
-    // Clear tracks AND loop state (markers + loops)
+    // Clear tracks AND loop state
     set({ 
       tracks: [],
       loopState: {
@@ -253,15 +318,40 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
       }
     });
     
-    // Clear loop state from storage
-    saveLoopV2State([], [], null);
-    saveTrackSettings([]);
+    // Update piece
+    if (currentPieceId) {
+      const piece = await getPiece(currentPieceId);
+      if (piece) {
+        piece.trackIds = [];
+        piece.updatedAt = Date.now();
+        await savePiece(piece);
+      }
+      
+      await saveTrackSettingsToPiece(
+        currentPieceId,
+        [],
+        { markers: [], loops: [], activeLoopId: null },
+        1.0,
+        1.0
+      );
+    }
   },
 
   updateTrack: (id: string, updates: Partial<AudioTrack>) => {
     const newTracks = get().tracks.map((t) => (t.id === id ? { ...t, ...updates } : t));
     set({ tracks: newTracks });
-    saveTrackSettings(newTracks);
+    
+    // Save to piece (async but don't wait)
+    const { currentPieceId, loopState, playbackState, masterVolume } = get();
+    if (currentPieceId) {
+      saveTrackSettingsToPiece(
+        currentPieceId,
+        newTracks,
+        loopState,
+        playbackState.playbackRate,
+        masterVolume
+      ).catch(err => console.error('Failed to save track settings:', err));
+    }
   },
 
   reorderTracks: (fromIndex: number, toIndex: number) => {
@@ -269,7 +359,18 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
     const [movedTrack] = tracks.splice(fromIndex, 1);
     tracks.splice(toIndex, 0, movedTrack);
     set({ tracks });
-    saveTrackSettings(tracks);
+    
+    // Save to piece
+    const { currentPieceId, loopState, playbackState, masterVolume } = get();
+    if (currentPieceId) {
+      saveTrackSettingsToPiece(
+        currentPieceId,
+        tracks,
+        loopState,
+        playbackState.playbackRate,
+        masterVolume
+      ).catch(err => console.error('Failed to save track settings:', err));
+    }
   },
 
   setVolume: (id: string, volume: number) => {
@@ -325,7 +426,18 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
       isSolo: t.id === id,
     }));
     set({ tracks: newTracks });
-    saveTrackSettings(newTracks);
+
+    // Save to piece
+    const { currentPieceId, loopState, playbackState, masterVolume } = get();
+    if (currentPieceId) {
+      saveTrackSettingsToPiece(
+        currentPieceId,
+        newTracks,
+        loopState,
+        playbackState.playbackRate,
+        masterVolume
+      ).catch(err => console.error('Failed to save track settings:', err));
+    }
 
     // Update all WaveSurfer instances - all except 'id' are muted
     newTracks.forEach(t => {
@@ -343,7 +455,18 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
       isMuted: false,
     }));
     set({ tracks: newTracks });
-    saveTrackSettings(newTracks);
+
+    // Save to piece
+    const { currentPieceId, loopState, playbackState, masterVolume } = get();
+    if (currentPieceId) {
+      saveTrackSettingsToPiece(
+        currentPieceId,
+        newTracks,
+        loopState,
+        playbackState.playbackRate,
+        masterVolume
+      ).catch(err => console.error('Failed to save track settings:', err));
+    }
 
     // Update all WaveSurfer instances
     const hasSoloedTracks = newTracks.some(t => t.isSolo);
@@ -409,7 +532,7 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
     set((state) => {
       const updates: Partial<AudioStore> = {
         playbackState: { ...state.playbackState, currentTime: time },
-        _preserveLoopOnNextSeek: false, // Reset flag
+        _preserveLoopOnNextSeek: false,
       };
       
       // Disable active loop only if seeking outside of it
@@ -420,7 +543,17 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
           activeLoopId: null,
           loops: state.loopState.loops.map(l => ({ ...l, enabled: false }))
         };
-        saveLoopV2State(updates.loopState.markers, updates.loopState.loops, null);
+        
+        // Save to piece
+        if (state.currentPieceId) {
+          saveTrackSettingsToPiece(
+            state.currentPieceId,
+            state.tracks,
+            updates.loopState,
+            state.playbackState.playbackRate,
+            state.masterVolume
+          ).catch(err => console.error('Failed to save loop state:', err));
+        }
       } else if (seekingInsideActiveLoop) {
         logger.debug('✅ Keeping loop active (seeking inside loop)');
       }
@@ -455,12 +588,34 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
     set((state) => ({
       playbackState: { ...state.playbackState, playbackRate: rate },
     }));
-    savePlaybackRate(rate);
+    
+    // Save to piece
+    const { currentPieceId, tracks, loopState, masterVolume } = get();
+    if (currentPieceId) {
+      saveTrackSettingsToPiece(
+        currentPieceId,
+        tracks,
+        loopState,
+        rate,
+        masterVolume
+      ).catch(err => console.error('Failed to save playback rate:', err));
+    }
   },
 
   setMasterVolume: (volume: number) => {
     set({ masterVolume: volume });
-    saveMasterVolume(volume);
+    
+    // Save to piece
+    const { currentPieceId, tracks, loopState, playbackState } = get();
+    if (currentPieceId) {
+      saveTrackSettingsToPiece(
+        currentPieceId,
+        tracks,
+        loopState,
+        playbackState.playbackRate,
+        volume
+      ).catch(err => console.error('Failed to save master volume:', err));
+    }
   },
 
   toggleLoopPanel: () => {
@@ -482,7 +637,7 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
   },
 
   addMarker: (time: number, label?: string) => {
-    const { loopState, playbackState } = get();
+    const { loopState, playbackState, currentPieceId, tracks, masterVolume } = get();
     
     // Limit markers
     if (loopState.markers.length >= 20) {
@@ -491,7 +646,12 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
     }
 
     const id = `marker-${Date.now()}-${Math.random()}`;
-    const newMarker: import('../types/audio').Marker = {
+    const newMarker: {
+      id: string;
+      time: number;
+      createdAt: number;
+      label?: string;
+    } = {
       id,
       time: Math.max(0, Math.min(time, playbackState.duration)),
       createdAt: Date.now(),
@@ -510,14 +670,22 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
 
     set({ loopState: newLoopState });
 
-    // Save to localStorage
-    saveLoopV2State(newLoopState.markers, newLoopState.loops, newLoopState.activeLoopId);
+    // Save to piece
+    if (currentPieceId) {
+      saveTrackSettingsToPiece(
+        currentPieceId,
+        tracks,
+        newLoopState,
+        playbackState.playbackRate,
+        masterVolume
+      ).catch(err => console.error('Failed to save marker:', err));
+    }
 
     return id;
   },
 
   removeMarker: (id: string) => {
-    const { loopState } = get();
+    const { loopState, currentPieceId, tracks, playbackState, masterVolume } = get();
     
     // Remove loops using this marker
     const loopsToRemove = loopState.loops.filter(
@@ -546,12 +714,20 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
 
     set({ loopState: newLoopState });
 
-    // Save to localStorage
-    saveLoopV2State(newLoopState.markers, newLoopState.loops, newLoopState.activeLoopId);
+    // Save to piece
+    if (currentPieceId) {
+      saveTrackSettingsToPiece(
+        currentPieceId,
+        tracks,
+        newLoopState,
+        playbackState.playbackRate,
+        masterVolume
+      ).catch(err => console.error('Failed to save after marker removal:', err));
+    }
   },
 
   updateMarkerTime: (id: string, time: number) => {
-    const { loopState, playbackState } = get();
+    const { loopState, playbackState, currentPieceId, tracks, masterVolume } = get();
     const newMarkers = loopState.markers.map(m =>
       m.id === id
         ? { ...m, time: Math.max(0, Math.min(time, playbackState.duration)) }
@@ -567,12 +743,20 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
 
     set({ loopState: newLoopState });
 
-    // Save to localStorage
-    saveLoopV2State(newLoopState.markers, newLoopState.loops, newLoopState.activeLoopId);
+    // Save to piece
+    if (currentPieceId) {
+      saveTrackSettingsToPiece(
+        currentPieceId,
+        tracks,
+        newLoopState,
+        playbackState.playbackRate,
+        masterVolume
+      ).catch(err => console.error('Failed to save marker time:', err));
+    }
   },
 
   createLoop: (startMarkerId: string, endMarkerId: string) => {
-    const { loopState } = get();
+    const { loopState, currentPieceId, tracks, playbackState, masterVolume } = get();
 
     // Limit loops
     if (loopState.loops.length >= 10) {
@@ -594,7 +778,13 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
       : [endMarkerId, startMarkerId];
 
     const id = `loop-${Date.now()}-${Math.random()}`;
-    const newLoop: import('../types/audio').Loop = {
+    const newLoop: {
+      id: string;
+      startMarkerId: string;
+      endMarkerId: string;
+      enabled: boolean;
+      createdAt: number;
+    } = {
       id,
       startMarkerId: start,
       endMarkerId: end,
@@ -611,14 +801,22 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
 
     set({ loopState: newLoopState });
 
-    // Save to localStorage
-    saveLoopV2State(newLoopState.markers, newLoopState.loops, newLoopState.activeLoopId);
+    // Save to piece
+    if (currentPieceId) {
+      saveTrackSettingsToPiece(
+        currentPieceId,
+        tracks,
+        newLoopState,
+        playbackState.playbackRate,
+        masterVolume
+      ).catch(err => console.error('Failed to save loop:', err));
+    }
 
     return id;
   },
 
   removeLoop: (id: string) => {
-    const { loopState } = get();
+    const { loopState, currentPieceId, tracks, playbackState, masterVolume } = get();
     const newLoops = loopState.loops.filter(l => l.id !== id);
 
     logger.debug(`🗑️ Removed loop ${id}`);
@@ -631,12 +829,20 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
 
     set({ loopState: newLoopState });
 
-    // Save to localStorage
-    saveLoopV2State(newLoopState.markers, newLoopState.loops, newLoopState.activeLoopId);
+    // Save to piece
+    if (currentPieceId) {
+      saveTrackSettingsToPiece(
+        currentPieceId,
+        tracks,
+        newLoopState,
+        playbackState.playbackRate,
+        masterVolume
+      ).catch(err => console.error('Failed to save after loop removal:', err));
+    }
   },
 
   toggleLoopById: (id: string) => {
-    const { loopState, seek } = get();
+    const { loopState, seek, currentPieceId, tracks, playbackState, masterVolume } = get();
     const loop = loopState.loops.find(l => l.id === id);
 
     if (!loop) return;
@@ -660,8 +866,16 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
 
     set({ loopState: newLoopState });
 
-    // Save to localStorage
-    saveLoopV2State(newLoopState.markers, newLoopState.loops, newLoopState.activeLoopId);
+    // Save to piece
+    if (currentPieceId) {
+      saveTrackSettingsToPiece(
+        currentPieceId,
+        tracks,
+        newLoopState,
+        playbackState.playbackRate,
+        masterVolume
+      ).catch(err => console.error('Failed to save loop toggle:', err));
+    }
 
     // If enabling, seek to the start of the loop
     if (newEnabled) {
@@ -674,7 +888,7 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
   },
 
   setActiveLoop: (id: string | null) => {
-    const { loopState } = get();
+    const { loopState, currentPieceId, tracks, playbackState, masterVolume } = get();
 
     const newLoops = loopState.loops.map(l => ({
       ...l,
@@ -691,12 +905,19 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
 
     set({ 
       loopState: newLoopState,
-      // Set a flag to preserve loop on next seek (for loop zone clicks)
       _preserveLoopOnNextSeek: id !== null,
     });
 
-    // Save to localStorage
-    saveLoopV2State(newLoopState.markers, newLoopState.loops, newLoopState.activeLoopId);
+    // Save to piece
+    if (currentPieceId) {
+      saveTrackSettingsToPiece(
+        currentPieceId,
+        tracks,
+        newLoopState,
+        playbackState.playbackRate,
+        masterVolume
+      ).catch(err => console.error('Failed to save active loop:', err));
+    }
   },
 
   setWaveformStyle: (style: 'modern' | 'classic') => {
@@ -734,38 +955,338 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
     set({ waveformMinimap: minimap });
     saveWaveformMinimap(minimap);
   },
+
+  // Piece management actions
+  createPiece: async (name: string): Promise<string> => {
+    const id = `piece-${Date.now()}-${Math.random()}`;
+    const piece: Piece = {
+      id,
+      name,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      trackIds: [],
+    };
+
+    await savePiece(piece);
+    
+    // Initialize empty settings
+    await savePieceSettings(id, {
+      trackSettings: [],
+      loopState: { markers: [], loops: [], activeLoopId: null },
+      playbackRate: 1.0,
+      masterVolume: 1.0,
+    });
+
+    set({ currentPieceId: id });
+    saveCurrentPieceId(id);
+    
+    logger.debug(`🎼 Created piece: ${name} (${id})`);
+    return id;
+  },
+
+  loadPiece: async (id: string): Promise<void> => {
+    const { pause } = get();
+    
+    // Pause playback
+    pause();
+
+    const piece = await getPiece(id);
+    if (!piece) {
+      throw new Error(`Piece ${id} not found`);
+    }
+
+    const settings = await getPieceSettings(id);
+    if (!settings) {
+      throw new Error(`Piece settings ${id} not found`);
+    }
+
+    // Load audio files
+    const allFiles = await getAllAudioFiles();
+    const tracksData: AudioTrack[] = [];
+
+    for (const trackId of piece.trackIds) {
+      const fileData = allFiles.find(f => f.id === trackId);
+      const trackSetting = settings.trackSettings.find(s => s.id === trackId);
+      
+      if (fileData && trackSetting) {
+        tracksData.push({
+          ...trackSetting,
+          file: fileData.file,
+        } as AudioTrack);
+      }
+    }
+
+    // Update state
+    set({
+      tracks: tracksData,
+      loopState: {
+        ...settings.loopState,
+        editMode: false,
+      },
+      playbackState: {
+        isPlaying: false,
+        currentTime: 0,
+        duration: 0,
+        playbackRate: settings.playbackRate,
+      },
+      masterVolume: settings.masterVolume,
+      currentPieceId: id,
+      currentPieceName: piece.name,
+    });
+
+    saveCurrentPieceId(id);
+    logger.debug(`🎼 Loaded piece: ${piece.name} (${id})`);
+  },
+
+  deletePiece: async (id: string): Promise<void> => {
+    const { currentPieceId } = get();
+    
+    const piece = await getPiece(id);
+    if (!piece) {
+      throw new Error(`Piece ${id} not found`);
+    }
+
+    // Delete audio files associated with this piece
+    await Promise.all(piece.trackIds.map(trackId => deleteAudioFile(trackId)));
+    
+    // Delete piece and settings
+    await deletePieceDB(id);
+    await deletePieceSettings(id);
+
+    // If deleting current piece, clear state
+    if (currentPieceId === id) {
+      set({
+        tracks: [],
+        loopState: {
+          markers: [],
+          loops: [],
+          activeLoopId: null,
+          editMode: false,
+        },
+        playbackState: {
+          isPlaying: false,
+          currentTime: 0,
+          duration: 0,
+          playbackRate: 1.0,
+        },
+        masterVolume: 1.0,
+        currentPieceId: null,
+        currentPieceName: '',
+      });
+      saveCurrentPieceId(null);
+    }
+
+    logger.debug(`🗑️ Deleted piece: ${id}`);
+  },
+
+  renamePiece: async (id: string, name: string): Promise<void> => {
+    const piece = await getPiece(id);
+    if (!piece) {
+      throw new Error(`Piece ${id} not found`);
+    }
+
+    piece.name = name;
+    piece.updatedAt = Date.now();
+    await savePiece(piece);
+    
+    // Update current piece name if renaming current piece
+    const state = get();
+    if (state.currentPieceId === id) {
+      set({ currentPieceName: name });
+    }
+
+    logger.debug(`✏️ Renamed piece ${id} to: ${name}`);
+  },
+
+  listPieces: async (): Promise<PieceWithStats[]> => {
+    const pieces = await getAllPieces();
+    const piecesWithStats: PieceWithStats[] = [];
+
+    for (const piece of pieces) {
+      let totalSize = 0;
+      let maxDuration = 0;
+
+      // Calculate size and duration
+      for (const trackId of piece.trackIds) {
+        try {
+          const size = await getAudioFileSize(trackId);
+          totalSize += size;
+        } catch (err) {
+          console.warn(`Failed to get size for track ${trackId}:`, err);
+        }
+      }
+
+      piecesWithStats.push({
+        ...piece,
+        duration: maxDuration,
+        trackCount: piece.trackIds.length,
+        size: totalSize,
+      });
+    }
+
+    // Sort by most recently updated
+    return piecesWithStats.sort((a, b) => b.updatedAt - a.updatedAt);
+  },
+
+  getRecentPieces: async (limit: number = 10): Promise<PieceWithStats[]> => {
+    const allPieces = await get().listPieces();
+    return allPieces.slice(0, limit);
+  },
+
+  getCurrentPiece: async (): Promise<PieceWithStats | null> => {
+    const { currentPieceId } = get();
+    if (!currentPieceId) return null;
+
+    const piece = await getPiece(currentPieceId);
+    if (!piece) return null;
+
+    let totalSize = 0;
+    for (const trackId of piece.trackIds) {
+      try {
+        const size = await getAudioFileSize(trackId);
+        totalSize += size;
+      } catch (err) {
+        console.warn(`Failed to get size for track ${trackId}:`, err);
+      }
+    }
+
+    const { playbackState } = get();
+    
+    return {
+      ...piece,
+      duration: playbackState.duration,
+      trackCount: piece.trackIds.length,
+      size: totalSize,
+    };
+  },
+
+  deleteAllPieces: async (): Promise<void> => {
+    const { pause } = get();
+    
+    pause();
+
+    // Clear all stores
+    await clearAllAudioFiles();
+    await clearAllPieces();
+    await clearAllPieceSettings();
+
+    // Reset state
+    set({
+      tracks: [],
+      loopState: {
+        markers: [],
+        loops: [],
+        activeLoopId: null,
+        editMode: false,
+      },
+      playbackState: {
+        isPlaying: false,
+        currentTime: 0,
+        duration: 0,
+        playbackRate: 1.0,
+      },
+      masterVolume: 1.0,
+      currentPieceId: null,
+      currentPieceName: '',
+    });
+
+    saveCurrentPieceId(null);
+    logger.debug('🗑️ Deleted all pieces');
+  },
+
+  getTotalStorageSize: async (): Promise<number> => {
+    const pieces = await getAllPieces();
+    let totalSize = 0;
+
+    for (const piece of pieces) {
+      for (const trackId of piece.trackIds) {
+        try {
+          const size = await getAudioFileSize(trackId);
+          totalSize += size;
+        } catch (err) {
+          console.warn(`Failed to get size for track ${trackId}:`, err);
+        }
+      }
+    }
+
+    return totalSize;
+  },
 }));
 
 // Function to restore tracks from IndexedDB on app init
 export const restoreTracks = async () => {
   try {
-    const trackSettings = loadTrackSettings();
-    const storedFiles = await getAllAudioFiles();
     const state = useAudioStore.getState();
 
     if (!state.audioContext) {
       state.initAudioContext();
     }
 
-    // Create all tracks immediately with null buffers
-    const restoredTracks: AudioTrack[] = trackSettings
-      .map((setting: Partial<AudioTrack> & { id: string }) => {
-        const storedFile = storedFiles.find(f => f.id === setting.id);
-        if (storedFile) {
-          return {
-            ...setting,
-            file: storedFile.file,
-          };
+    // Check if pieces exist
+    const pieces = await getAllPieces();
+    
+    if (pieces.length === 0) {
+      // Migration: Check for legacy localStorage data
+      const trackSettings = loadTrackSettings();
+      const storedFiles = await getAllAudioFiles();
+      
+      if (storedFiles.length > 0) {
+        // Migrate legacy data to a new piece
+        logger.debug('🔄 Migrating legacy data to new piece system');
+        
+        const pieceName = generatePieceName();
+        const pieceId = await state.createPiece(pieceName);
+        
+        // Create piece with existing track IDs
+        const piece = await getPiece(pieceId);
+        if (piece) {
+          piece.trackIds = storedFiles.map(f => f.id);
+          piece.updatedAt = Date.now();
+          await savePiece(piece);
         }
-        return null;
-      })
-      .filter((t: AudioTrack | null): t is AudioTrack => t !== null);
+        
+        // Migrate settings
+        const loopState = loadLoopV2State();
+        await savePieceSettings(pieceId, {
+          trackSettings: trackSettings.length > 0 ? trackSettings : storedFiles.map((f, idx) => ({
+            id: f.id,
+            name: f.file.name,
+            volume: 0.8,
+            isMuted: false,
+            isSolo: false,
+            color: COLORS[idx % COLORS.length],
+          })),
+          loopState: {
+            markers: loopState.markers || [],
+            loops: loopState.loops || [],
+            activeLoopId: loopState.activeLoopId || null,
+          },
+          playbackRate: loadPlaybackRate(),
+          masterVolume: loadMasterVolume(),
+        });
+        
+        // Load the migrated piece
+        await state.loadPiece(pieceId);
+        
+        logger.debug('✅ Migration complete');
+        return;
+      }
+      
+      // No data to restore
+      return;
+    }
 
-    // Show tracks immediately
-    if (restoredTracks.length > 0) {
-      useAudioStore.setState({
-        tracks: restoredTracks,
-      });
+    // Load current piece or first piece
+    let currentPieceId = state.currentPieceId;
+    
+    if (!currentPieceId || !pieces.find(p => p.id === currentPieceId)) {
+      // Load most recently updated piece
+      const sortedPieces = pieces.sort((a, b) => b.updatedAt - a.updatedAt);
+      currentPieceId = sortedPieces[0].id;
+    }
+
+    if (currentPieceId) {
+      await state.loadPiece(currentPieceId);
     }
   } catch (error) {
     console.error('Failed to restore tracks:', error);

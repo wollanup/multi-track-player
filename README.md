@@ -27,6 +27,14 @@ A modern, browser-based multi-track audio player designed for musicians who want
   - Long press: Unmute all tracks at once
 - **Waveform Visualization** - See your audio with interactive waveforms powered by WaveSurfer.js
 
+### 🎵 **Multi-Piece Management**
+- **Create Multiple Projects** - Organize your work into separate pieces/songs
+- **Independent Storage** - Each piece saves its own tracks, loops, and settings
+- **Quick Switching** - Access recent pieces from the dropdown menu (click "Stemux ▼")
+- **Auto-Save** - Changes are automatically saved to your browser
+- **Easy Management** - Rename, delete, or create new pieces from one place
+- **Storage Overview** - See total space used by all your pieces
+
 ### 🔁 **Loop System**
 - **Visual Timeline** - See your playback position in real-time
 - **Easy Loop Creation** - Mark start and end points while playing
@@ -117,6 +125,21 @@ Access at http://localhost:3000
    - Use solo to isolate instruments
    - Mute tracks you don't need
    - Control master volume from the bottom bar
+
+### Managing Pieces
+
+Organize your work into separate pieces (songs/projects):
+
+1. **Quick Access** - Click **"Stemux ▼"** in the top bar to open the pieces menu
+2. **Switch Pieces** - Select from your 10 most recent pieces
+3. **Create New** - Click "Manage Pieces" → "New Piece" to start fresh
+4. **Current Piece** 
+   - Click the piece name to rename it
+   - Each piece keeps its own tracks, loops, and settings
+5. **Delete Old Work** - Remove pieces you no longer need
+
+**Desktop:** See current piece name in top bar  
+**Mobile:** First item in dropdown shows current piece
 
 ### Track Controls
 

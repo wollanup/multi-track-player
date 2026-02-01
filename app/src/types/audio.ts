@@ -40,6 +40,40 @@ export interface LoopState {
   editMode: boolean;
 }
 
+// Piece (morceau) types
+export interface PieceSettings {
+  trackSettings: Array<{
+    id: string;
+    name: string;
+    volume: number;
+    isMuted: boolean;
+    isSolo: boolean;
+    color: string;
+    isCollapsed?: boolean;
+  }>;
+  loopState: {
+    markers: Marker[];
+    loops: Loop[];
+    activeLoopId: string | null;
+  };
+  playbackRate: number;
+  masterVolume: number;
+}
+
+export interface Piece {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  trackIds: string[];
+}
+
+export interface PieceWithStats extends Piece {
+  duration: number;
+  trackCount: number;
+  size: number;
+}
+
 export interface AudioStore {
   tracks: AudioTrack[];
   playbackState: PlaybackState;
@@ -53,6 +87,8 @@ export interface AudioStore {
   waveformTimeline: boolean;
   waveformMinimap: boolean;
   _preserveLoopOnNextSeek?: boolean; // Internal flag for loop activation
+  currentPieceId: string | null;
+  currentPieceName: string;
   
   addTrack: (file: File) => void;
   removeTrack: (id: string) => void;
@@ -91,4 +127,15 @@ export interface AudioStore {
   setWaveformMinimap: (minimap: boolean) => void;
   
   initAudioContext: () => void;
+
+  // Piece management actions
+  createPiece: (name: string) => Promise<string>;
+  loadPiece: (id: string) => Promise<void>;
+  deletePiece: (id: string) => Promise<void>;
+  renamePiece: (id: string, name: string) => Promise<void>;
+  listPieces: () => Promise<PieceWithStats[]>;
+  getRecentPieces: (limit?: number) => Promise<PieceWithStats[]>;
+  getCurrentPiece: () => Promise<PieceWithStats | null>;
+  deleteAllPieces: () => Promise<void>;
+  getTotalStorageSize: () => Promise<number>;
 }

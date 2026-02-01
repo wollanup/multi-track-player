@@ -62,6 +62,10 @@
       "welcome": {
         "description": "Stemux is a multi-track audio player designed for musicians who want to practice with isolated stems. Load your tracks, control volumes independently, and create loops for focused practice.",
         "title": "Welcome to Stemux!"
+      },
+      "pieces": {
+        "title": "Pieces Management",
+        "description": "Organize your work by creating multiple pieces. Each piece keeps its tracks, loops, and settings separately. Click \"Stemux ▼\" at the top to access the menu: create, rename, delete, or switch between your pieces."
       }
     },
     "title": "User Guide"
@@ -92,6 +96,7 @@
     "deleteAllTracks": "Delete All Tracks",
     "interface": "Interface",
     "lightMode": "Light mode",
+    "pieces": "Manage Pieces",
     "refresh": "Refresh app",
     "theme": "Theme",
     "themeDialog": {
@@ -102,6 +107,33 @@
       "title": "Choose theme"
     },
     "title": "Menu"
+  },
+  "pieces": {
+    "title": "Manage Pieces",
+    "recentPieces": "Recent Pieces",
+    "currentPiece": "Current Piece",
+    "newPiece": "New Piece",
+    "noPieces": "No other pieces",
+    "duration": "Duration",
+    "tracks": "{{count}} track",
+    "tracks_other": "{{count}} tracks",
+    "size": "Size",
+    "delete": "Delete",
+    "deleteConfirmTitle": "Delete piece?",
+    "deleteConfirmMessage": "This will permanently delete the piece \"{{name}}\" and all its tracks ({{count}}). This action cannot be undone.",
+    "deleteConfirmButton": "Delete",
+    "cancelButton": "Cancel",
+    "closeButton": "Close",
+    "globalStats": "Global Statistics",
+    "totalSize": "Total storage used",
+    "deleteAll": "Delete all pieces",
+    "deleteAllConfirmTitle": "Delete all pieces?",
+    "deleteAllConfirmMessage": "This will permanently delete ALL pieces and their tracks. This action cannot be undone.",
+    "deleteAllConfirmButton": "Delete All",
+    "renameDialogTitle": "Rename piece",
+    "renameDialogLabel": "Piece name",
+    "renameDialogCancel": "Cancel",
+    "renameDialogSave": "Save"
   },
   "pwa": {
     "reload": "Reload",
@@ -143,6 +175,12 @@
     "expand": "Expand",
     "importing": "Importing file...",
     "loading": "Loading..."
+  },
+  "units": {
+    "bytes": "B",
+    "kb": "KB",
+    "mb": "MB",
+    "gb": "GB"
   },
   "upload": {
     "description": "Drop audio files here or click to select",
