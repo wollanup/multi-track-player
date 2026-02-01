@@ -24,6 +24,14 @@ function normalizeAudioBuffer(buffer: AudioBuffer, audioContext: AudioContext): 
     }
   }
 
+  // Safety: if signal is too weak (< 2%), probably just noise - don't normalize
+  const MIN_SIGNAL_THRESHOLD = 0.02; // 2% (avoids boosting noise by +34dB+)
+  if (maxPeak < MIN_SIGNAL_THRESHOLD) {
+    console.warn(`⚠️ Recording signal too weak (peak: ${(maxPeak * 100).toFixed(3)}%) - Normalization SKIPPED to avoid amplifying noise`);
+    console.warn(`⚠️ Check your microphone level or gain settings`);
+    return buffer;
+  }
+
   // If already at max or silent, return as-is
   if (maxPeak === 0 || maxPeak >= 0.99) {
     logger.log(`🔊 No normalization needed (peak: ${(maxPeak * 100).toFixed(1)}%)`);
