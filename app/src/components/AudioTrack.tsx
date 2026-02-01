@@ -12,13 +12,25 @@ import {
   Slider,
   Stack,
   TextField,
-  Typography
+  Tooltip,
+  Typography,
+  Chip,
 } from '@mui/material';
-import {Close, DragIndicator, Headset, VolumeOff, VolumeUp, ExpandMore} from '@mui/icons-material';
+import CloseIcon from '@mui/icons-material/Close';
+import DeleteIcon from '@mui/icons-material/Delete';
+import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
+import HeadsetIcon from '@mui/icons-material/Headset';
+import VolumeOffIcon from '@mui/icons-material/VolumeOff';
+import VolumeUpIcon from '@mui/icons-material/VolumeUp';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
+import MicIcon from '@mui/icons-material/Mic';
+import DownloadIcon from '@mui/icons-material/Download';
 import {useTranslation} from 'react-i18next';
 import {useAudioStore} from '../hooks/useAudioStore';
 import {useThrottle} from '../hooks/useThrottle';
 import WaveformDisplay from './WaveformDisplay';
+import RecordableWaveform from './RecordableWaveform';
 import type {AudioTrack as AudioTrackType} from '../types/audio';
 import {useSortable} from '@dnd-kit/sortable';
 import {CSS} from '@dnd-kit/utilities';
@@ -39,7 +51,9 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
     tracks,
     updateTrack,
     loopState,
-} = useAudioStore();
+    toggleRecordArm,
+    clearRecording,
+  } = useAudioStore();
 
   // DND Kit sortable
   const {
@@ -163,6 +177,19 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
     setIsDraggingVolume(false);
   };
 
+  const handleDownloadRecording = () => {
+    if (!track.file) return;
+    
+    const url = URL.createObjectURL(track.file);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = track.file.name || `${track.name}.wav`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const handleStartEditName = () => {
     setEditedName(track.name.replace('.mp3', ''));
     setIsEditingName(true);
@@ -187,13 +214,37 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
         sx={{
           p: 2,
           mb: 1.5,
+          // Left border: always 4px with track color
           borderLeft: `4px solid ${track.isMuted ? 'rgba(128, 128, 128, 0.3)' : track.color}`,
-          border: loopState.editMode ? '1px solid' : undefined,
-          borderColor: loopState.editMode ? 'warning.main' : undefined,
+          // Other borders: always 2px, color changes based on mode
+          borderTop: '2px solid',
+          borderRight: '2px solid',
+          borderBottom: '2px solid',
+          borderTopColor: track.isArmed
+            ? 'error.main'  // Red when armed
+            : loopState.editMode
+            ? 'warning.main'  // Orange/yellow in edit mode
+            : 'transparent',  // Transparent by default
+          borderRightColor: track.isArmed
+            ? 'error.main'
+            : loopState.editMode
+            ? 'warning.main'
+            : 'transparent',
+          borderBottomColor: track.isArmed
+            ? 'error.main'
+            : loopState.editMode
+            ? 'warning.main'
+            : 'transparent',
+          bgcolor: track.isArmed ? 'rgba(244, 67, 54, 0.08)' : undefined,
           opacity: track.isMuted || isInactive ? 0.5 : 1,
-          transition: isDragging ? 'none' : 'opacity 0.2s, border 0.2s ease-in-out',
-          boxShadow: isDragging ? 8 : 2,
+          transition: isDragging ? 'none' : 'opacity 0.2s, border-color 0.2s ease-in-out',
+          boxShadow: isDragging ? 8 : track.isArmed ? 4 : 2,
           zIndex: isDragging ? 1000 : 'auto',
+          animation: track.isArmed && !track.recordingState ? 'armed-glow 2s infinite' : 'none',
+          '@keyframes armed-glow': {
+            '0%, 100%': { boxShadow: '0 0 0 rgba(244, 67, 54, 0)' },
+            '50%': { boxShadow: '0 0 20px rgba(244, 67, 54, 0.4)' },
+          },
         }}
       >
       {track.isLoading ? (
@@ -245,7 +296,7 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
             }}
             aria-label="Drag to reorder"
           >
-            <DragIndicator fontSize="small" />
+            <DragIndicatorIcon fontSize="small" />
           </IconButton>
 
           {isEditingName ? (
@@ -282,6 +333,23 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
               {track.name.replace('.mp3', '')}
             </Typography>
           )}
+
+          {/* Recording status chip */}
+          {track.recordingState === 'recording' && (
+            <Chip
+              label={t('recording.recording')}
+              size="small"
+              color="error"
+              icon={<FiberManualRecordIcon sx={{ animation: 'blink 1s infinite' }} />}
+              sx={{
+                ml: 1,
+                '@keyframes blink': {
+                  '0%, 100%': { opacity: 1 },
+                  '50%': { opacity: 0 },
+                },
+              }}
+            />
+          )}
           
           <Box sx={{ flexGrow: 1 }} />
           
@@ -295,17 +363,21 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
             }}
             aria-label={isCollapsed ? t('track.expand') : t('track.collapse')}
           >
-            <ExpandMore fontSize="small" />
+            <ExpandMoreIcon fontSize="small" />
           </IconButton>
           <IconButton size="small" onClick={() => setDeleteDialogOpen(true)}>
-            <Close fontSize="small" />
+            <CloseIcon fontSize="small" />
           </IconButton>
         </Box>
 
         {/* Waveform and controls - hidden when collapsed */}
         {/* Waveform */}
         <Box ref={waveformContainerRef} sx={{ position: 'relative', mt: 1.5, mb: 1.5, display: isCollapsed ? 'none' : 'block' }}>
-          <WaveformDisplay track={track} trackId={track.id} />
+          {track.isRecordable && !track.file ? (
+            <RecordableWaveform track={track} />
+          ) : (
+            <WaveformDisplay track={track} trackId={track.id} />
+          )}
         </Box>
 
         {/* Controls */}
@@ -328,7 +400,7 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
               },
             }}
           >
-            <Headset />
+            <HeadsetIcon />
           </IconButton>
 
           {/* Mute */}
@@ -347,7 +419,7 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
               },
             }}
           >
-            {track.isMuted ? <VolumeOff /> : <VolumeUp />}
+            {track.isMuted ? <VolumeOffIcon /> : <VolumeUpIcon />}
           </IconButton>
 
           {/* Volume slider */}
@@ -365,6 +437,89 @@ const AudioTrack = ({ track }: AudioTrackProps) => {
               }}
             />
           </Box>
+
+          {/* REC Button (recordable tracks only) */}
+          {track.isRecordable && (
+            <>
+              <Tooltip 
+                title={
+                  track.file 
+                    ? t('recording.clearRecordingFirst') // "Delete recording first to arm"
+                    : t('recording.armTrack')
+                }
+              >
+                <span> {/* Wrapper for disabled button tooltip */}
+                  <IconButton
+                    size="small"
+                    onClick={() => toggleRecordArm(track.id)}
+                    disabled={!!track.file} // Disabled if recording exists
+                    sx={{
+                      bgcolor: track.isArmed ? 'error.main' : 'transparent',
+                      color: track.isArmed ? 'white' : 'inherit',
+                      animation: track.recordingState === 'recording'
+                        ? 'pulse 1s infinite'
+                        : 'none',
+                      '&:hover': {
+                        bgcolor: track.isArmed ? 'error.dark' : 'action.hover',
+                      },
+                      '&.Mui-disabled': {
+                        color: 'action.disabled',
+                      },
+                      '@keyframes pulse': {
+                        '0%, 100%': { opacity: 1 },
+                        '50%': { opacity: 0.5 },
+                      },
+                    }}
+                  >
+                    {track.recordingState === 'recording' ? (
+                      <FiberManualRecordIcon />
+                    ) : (
+                      <MicIcon />
+                    )}
+                  </IconButton>
+                </span>
+              </Tooltip>
+
+              {/* Clear recording button (only when has recording) */}
+              {track.file && (
+                <>
+                  <Tooltip title={t('recording.clearRecording')}>
+                    <IconButton
+                      size="small"
+                      onClick={() => clearRecording(track.id)}
+                      disabled={track.recordingState === 'recording'}
+                      sx={{
+                        color: 'action.active',
+                        '&:hover': {
+                          color: 'error.main',
+                        },
+                      }}
+                    >
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+
+                  {/* Download recording button */}
+                  <Tooltip title={t('recording.downloadRecording')}>
+                    <IconButton
+                      size="small"
+                      onClick={handleDownloadRecording}
+                      disabled={track.recordingState === 'recording'}
+                      sx={{
+                        ml: 'auto', // Push to far right
+                        color: 'action.active',
+                        '&:hover': {
+                          color: 'primary.main',
+                        },
+                      }}
+                    >
+                      <DownloadIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </>
+              )}
+            </>
+          )}
         </Stack>
         </Box>
       </Box>

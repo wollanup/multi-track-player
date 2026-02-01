@@ -20,7 +20,7 @@ import {
     Radio,
     RadioGroup,
     FormControlLabel,
-    FormControl
+    FormControl,
 } from '@mui/material';
 import {
     DndContext,
@@ -38,7 +38,8 @@ import {
 } from '@dnd-kit/sortable';
 import {restoreTracks, useAudioStore} from './hooks/useAudioStore';
 import {useSyncWaveformScroll} from './hooks/useSyncWaveformScroll';
-import FileUploader from './components/FileUploader';
+import TrackAdder from './components/TrackAdder';
+import FullScreenDropZone from './components/FullScreenDropZone';
 import AudioTrack from './components/AudioTrack';
 import BottomControlBar from './components/BottomControlBar';
 import MarkersPanel from './components/MarkersPanel';
@@ -69,7 +70,16 @@ const ZOOM_PRESETS = [
 
 function App() {
     const {t} = useTranslation();
-    const {tracks, initAudioContext, loopState, toggleLoopEditMode, zoomLevel, removeAllTracks, reorderTracks, playbackState} = useAudioStore();
+    const {
+        tracks,
+        initAudioContext,
+        loopState,
+        toggleLoopEditMode,
+        zoomLevel,
+        removeAllTracks,
+        reorderTracks,
+        playbackState,
+    } = useAudioStore();
 
     // DND Kit sensors
     const sensors = useSensors(
@@ -261,6 +271,17 @@ function App() {
     useEffect(() => {
         const loadApp = async () => {
             initAudioContext();
+
+            // Clean orphaned data silently in background
+            try {
+                const { cleanOrphanedData } = useAudioStore.getState();
+                const result = await cleanOrphanedData();
+                if (result.filesDeleted > 0 || result.referencesRemoved > 0) {
+                    console.log(`🧹 Auto-cleanup: ${result.filesDeleted} orphaned files deleted, ${result.referencesRemoved} invalid references removed`);
+                }
+            } catch (error) {
+                console.warn('Failed to clean orphaned data on startup:', error);
+            }
 
             // Restore tracks (creates them with buffer: null first)
             await restoreTracks();
@@ -532,11 +553,11 @@ function App() {
                         </Box>
                     ) : tracks.length === 0 ? (
                         <Box>
-                            <FileUploader isDraggingWindow={isDraggingFile}/>
                             <Box
                                 sx={{
                                     textAlign: 'center',
-                                    py: 4
+                                    py: 4,
+                                    mb: 4
                                 }}
                             >
                                 <Typography variant="h5" color="text.secondary" gutterBottom>
@@ -546,6 +567,7 @@ function App() {
                                     {t('app.noTracksMessage')}
                                 </Typography>
                             </Box>
+                            <TrackAdder />
                         </Box>
                     ) : (
                         <Box>
@@ -590,11 +612,20 @@ function App() {
                                     ))}
                                 </SortableContext>
                             </DndContext>
-                            {/* File uploader at bottom when tracks exist */}
-                            <FileUploader isDraggingWindow={isDraggingFile}/>
+                            
+                            {/* Track adder */}
+                            <Box sx={{ mt: 2 }}>
+                                <TrackAdder />
+                            </Box>
                         </Box>
                     )}
                 </Container>
+
+                {/* Full-screen dropzone when dragging files */}
+                <FullScreenDropZone 
+                    isDragging={isDraggingFile} 
+                    onDragLeave={() => setIsDraggingFile(false)}
+                />
 
                 {/* Bottom control bar */}
                 <BottomControlBar/>

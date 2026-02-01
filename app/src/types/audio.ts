@@ -1,13 +1,20 @@
 export interface AudioTrack {
   id: string;
   name: string;
-  file: File;
+  file?: File; // Optional for recordable tracks
   volume: number; // 0-1
   isMuted: boolean;
   isSolo: boolean;
   color: string;
   isLoading?: boolean; // True during file import/loading
   isCollapsed?: boolean; // Track expanded/collapsed state
+  
+  // Recording properties
+  isRecordable?: boolean; // true if recording track
+  isArmed?: boolean; // REC toggle state (ON/OFF)
+  recordedBlob?: Blob; // Recorded audio data
+  recordingState?: 'idle' | 'armed' | 'recording' | 'stopped';
+  recordingStartOffset?: number; // Time offset in seconds when recording started
 }
 
 export interface PlaybackState {
@@ -50,6 +57,7 @@ export interface PieceSettings {
     isSolo: boolean;
     color: string;
     isCollapsed?: boolean;
+    isRecordable?: boolean; // Track is a recording track
   }>;
   loopState: {
     markers: Marker[];
@@ -90,6 +98,13 @@ export interface AudioStore {
   currentPieceId: string | null;
   currentPieceName: string;
   
+  // Recording state
+  isRecordingSupported: boolean;
+  mediaStream: MediaStream | null;
+  recordingStartTime: number | null;
+  loopBackup: { activeLoopId: string | null } | null;
+  pendingSeekAfterReady: number | null; // Position to seek to when next waveform becomes ready
+  
   addTrack: (file: File) => void;
   removeTrack: (id: string) => void;
   removeAllTracks: () => void;
@@ -100,6 +115,14 @@ export interface AudioStore {
   toggleSolo: (id: string) => void;
   exclusiveSolo: (id: string) => void;
   unmuteAll: () => void;
+  
+  // Recording actions
+  addRecordableTrack: () => Promise<void>;
+  toggleRecordArm: (trackId: string) => void;
+  startRecording: (trackId: string) => Promise<void>;
+  stopRecording: (trackId: string) => Promise<void>;
+  saveRecording: (trackId: string, blob: Blob) => Promise<void>;
+  clearRecording: (trackId: string) => Promise<void>;
   
   play: () => void;
   pause: () => void;
@@ -138,4 +161,5 @@ export interface AudioStore {
   getCurrentPiece: () => Promise<PieceWithStats | null>;
   deleteAllPieces: () => Promise<void>;
   getTotalStorageSize: () => Promise<number>;
+  cleanOrphanedData: () => Promise<{ filesDeleted: number; referencesRemoved: number }>;
 }

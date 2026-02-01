@@ -45,7 +45,10 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
   }, [seek]);
 
   useEffect(() => {
-    if (!containerRef.current || !track.file) return;
+    if (!containerRef.current) return;
+    
+    // Skip if no audio source
+    if (!track.file && !track.recordedBlob) return;
 
     const waveColor = track.color;
     const progressColor = track.color + '40'; // Add 50% opacity
@@ -99,8 +102,11 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
     registerWavesurfer(track.id, wavesurfer);
 
 
-    // Load audio directly from file - NO CONVERSION!
-    wavesurfer.loadBlob(track.file);
+    // Load audio from file or recordedBlob
+    const audioSource = track.recordedBlob || track.file;
+    if (audioSource) {
+      wavesurfer.loadBlob(audioSource);
+    }
 
     // Update playback position during playback (throttled for performance)
     let lastTimeUpdate = 0;
@@ -186,10 +192,20 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
         lastZoomRef.current = currentZoom;
       }
 
-      // Restore playback position
-      const currentTime = useAudioStore.getState().playbackState.currentTime;
-      if (currentTime > 0) {
-        wavesurfer.setTime(currentTime);
+      // Check if there's a pending seek (e.g., after recording completed)
+      const { pendingSeekAfterReady } = useAudioStore.getState();
+      if (pendingSeekAfterReady !== null) {
+        console.log(`⏱️ Executing pending seek: ${pendingSeekAfterReady.toFixed(4)}s`);
+        // Clear the pending seek flag FIRST to avoid re-triggering
+        useAudioStore.setState({ pendingSeekAfterReady: null });
+        // Then seek all tracks (including this newly ready one)
+        seek(pendingSeekAfterReady);
+      } else {
+        // Normal restore: restore playback position from store
+        const currentTime = useAudioStore.getState().playbackState.currentTime;
+        if (currentTime > 0) {
+          wavesurfer.setTime(currentTime);
+        }
       }
     });
 
@@ -292,7 +308,7 @@ const WaveformDisplay = ({ track }: WaveformDisplayProps) => {
       wavesurferRef.current = null;
       wavesurfer.destroy();
     };
-  }, [track.file, track.id, waveformTimeline, waveformMinimap, theme.palette.mode]); // Recreate when theme changes
+  }, [track.file, track.recordedBlob, track.id, waveformTimeline, waveformMinimap, theme.palette.mode]); // Recreate when theme changes
 
   // Handle waveform style and normalize with setOptions (no recreation needed)
   useEffect(() => {
@@ -440,6 +456,7 @@ export default memo(WaveformDisplay, (prev, next) => {
   return (
     prev.track.id === next.track.id &&
     prev.track.file === next.track.file &&
+    prev.track.recordedBlob === next.track.recordedBlob &&
     prev.track.color === next.track.color &&
     prev.track.volume === next.track.volume &&
     prev.track.isMuted === next.track.isMuted &&

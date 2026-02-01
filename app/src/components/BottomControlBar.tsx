@@ -1,6 +1,13 @@
 import {useEffect, useRef, useState} from 'react';
-import {AppBar, Box, Button, Fab, IconButton, Popover, Slider, Stack, styled, Toolbar, Typography} from '@mui/material';
-import {FastRewind, FastForward, Pause, PlayArrow, SkipPrevious, Speed, VolumeUp} from '@mui/icons-material';
+import {AppBar, Box, Button, Fab, IconButton, Popover, Slider, Stack, styled, Toolbar, Tooltip, Typography} from '@mui/material';
+import FastRewindIcon from '@mui/icons-material/FastRewind';
+import FastForwardIcon from '@mui/icons-material/FastForward';
+import PauseIcon from '@mui/icons-material/Pause';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
+import SkipPreviousIcon from '@mui/icons-material/SkipPrevious';
+import SpeedIcon from '@mui/icons-material/Speed';
+import VolumeUpIcon from '@mui/icons-material/VolumeUp';
+import FiberManualRecordIcon from '@mui/icons-material/FiberManualRecord';
 import {useAudioStore} from '../hooks/useAudioStore';
 import {usePlaybackTime} from '../hooks/usePlaybackTime';
 import {useThrottle} from '../hooks/useThrottle';
@@ -51,6 +58,10 @@ const BottomControlBar = () => {
   } = useAudioStore();
 
   const currentTime = usePlaybackTime(); // Use lightweight time tracker
+  
+  // Check if any track is armed or recording
+  const isAnyTrackArmed = tracks.some((t) => t.isArmed);
+  const isRecording = tracks.some((t) => t.recordingState === 'recording');
 
   const [speedDrawerOpen, setSpeedDrawerOpen] = useState(false);
   const [tempMasterVolume, setTempMasterVolume] = useState(masterVolume);
@@ -345,13 +356,46 @@ const BottomControlBar = () => {
             {/*</SmallFab>*/}
 
             {/* Play/Pause FAB */}
-            <StyledFab
-              color="primary"
-              aria-label={playbackState.isPlaying ? t('controls.pause') : t('controls.play')}
-              onClick={() => (playbackState.isPlaying ? pause() : play())}
+            <Tooltip
+              title={
+                playbackState.isPlaying
+                  ? isRecording
+                    ? t('recording.pauseRecording')
+                    : t('controls.pause')
+                  : isAnyTrackArmed
+                  ? t('recording.startRecording')
+                  : t('controls.play')
+              }
             >
-              {playbackState.isPlaying ? <Pause /> : <PlayArrow />}
-            </StyledFab>
+              <StyledFab
+                color={isAnyTrackArmed || isRecording ? 'error' : 'primary'}
+                aria-label={playbackState.isPlaying ? t('controls.pause') : t('controls.play')}
+                onClick={() => (playbackState.isPlaying ? pause() : play())}
+                sx={{
+                  animation: !playbackState.isPlaying && isAnyTrackArmed
+                    ? 'rec-pulse 2s ease-in-out infinite'
+                    : 'none',
+                  '@keyframes rec-pulse': {
+                    '0%, 100%': {
+                      transform: 'scale(1)',
+                      boxShadow: '0 0 0 0 rgba(244, 67, 54, 0.7)',
+                    },
+                    '50%': {
+                      transform: 'scale(1.05)',
+                      boxShadow: '0 0 0 10px rgba(244, 67, 54, 0)',
+                    },
+                  },
+                }}
+              >
+                {playbackState.isPlaying ? (
+                  <PauseIcon />
+                ) : isAnyTrackArmed ? (
+                  <FiberManualRecordIcon />
+                ) : (
+                  <PlayArrowIcon />
+                )}
+              </StyledFab>
+            </Tooltip>
 
             {/* Quick Forward Button */}
             {/*<SmallFab*/}
@@ -374,10 +418,10 @@ const BottomControlBar = () => {
           <IconButton
             size="small"
             onClick={handleSkipToStart}
-            disabled={!hasLoadedTracks}
+            disabled={!hasLoadedTracks || isRecording}
             aria-label={t('controls.skipToStart')}
           >
-            <SkipPrevious />
+            <SkipPreviousIcon />
           </IconButton>
           <IconButton
             size="small"
@@ -385,11 +429,11 @@ const BottomControlBar = () => {
             onPointerUp={handleRewindPointerUp}
             onPointerLeave={handleRewindPointerUp}
             onPointerCancel={handleRewindPointerUp}
-            disabled={!hasLoadedTracks}
+            disabled={!hasLoadedTracks || isRecording}
             aria-label={t('controls.rewind5')}
             sx={{ touchAction: 'none' }}
           >
-            <FastRewind />
+            <FastRewindIcon />
           </IconButton>
           <IconButton
             size="small"
@@ -397,11 +441,11 @@ const BottomControlBar = () => {
             onPointerUp={handleForwardPointerUp}
             onPointerLeave={handleForwardPointerUp}
             onPointerCancel={handleForwardPointerUp}
-            disabled={!hasLoadedTracks}
+            disabled={!hasLoadedTracks || isRecording}
             aria-label={t('controls.forward5')}
             sx={{ touchAction: 'none' }}
           >
-            <FastForward />
+            <FastForwardIcon />
           </IconButton>
           <Stack direction="row" spacing={1} alignItems="center" sx={{ minWidth: { xs: 'auto', sm: 120 } }}>
             <Typography variant="body2">
@@ -432,7 +476,7 @@ const BottomControlBar = () => {
             display: { xs: 'none', md: 'flex' }
           }}
         >
-          <VolumeUp fontSize="small" />
+          <VolumeUpIcon fontSize="small" />
           <Slider
             value={tempMasterVolume * 100}
             onChange={(_, value) => {
@@ -461,7 +505,7 @@ const BottomControlBar = () => {
           sx={{ display: { xs: 'flex', md: 'none' } }}
           aria-label={t('controls.masterVolume')}
         >
-          <VolumeUp />
+          <VolumeUpIcon />
         </IconButton>
 
         {/* Volume Popover for mobile */}
@@ -483,7 +527,7 @@ const BottomControlBar = () => {
               {t('controls.masterVolume')}
             </Typography>
             <Stack direction="row" spacing={1} alignItems="center">
-              <VolumeUp fontSize="small" />
+              <VolumeUpIcon fontSize="small" />
               <Slider
                 value={tempMasterVolume * 100}
                 onChange={(_, value) => {
@@ -506,7 +550,7 @@ const BottomControlBar = () => {
 
         {/* Playback speed */}
         <Button
-          startIcon={<Speed />}
+          startIcon={<SpeedIcon />}
           onClick={() => setSpeedDrawerOpen(true)}
           disabled={!hasLoadedTracks}
           variant="outlined"

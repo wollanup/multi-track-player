@@ -34,9 +34,10 @@ const saveTrackSettingsToPiece = async (pieceId: string, tracks: AudioTrack[], l
       name: t.name,
       volume: t.volume,
       isMuted: t.isMuted,
-      isSolo: t.isSolo,
+    isSolo: t.isSolo,
       color: t.color,
       isCollapsed: t.isCollapsed,
+      isRecordable: t.isRecordable, // Save recordable flag
     })),
     loopState: {
       markers: loopState.markers,
@@ -152,7 +153,7 @@ const generatePieceName = () => {
   return `${year}-${month}-${day}_${hours}-${minutes}`;
 };
 
-export // Global flag to prevent feedback loops during sync
+// Global flag to prevent feedback loops during sync
 let isSynchronizing = false;
 
 export const useAudioStore = create<AudioStore>((set, get) => ({
@@ -177,6 +178,15 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
   waveformMinimap: loadWaveformMinimap(),
   currentPieceId: loadCurrentPieceId(),
   currentPieceName: '',
+  
+  // Recording state
+  isRecordingSupported: typeof navigator !== 'undefined' && 
+    !!navigator.mediaDevices && 
+    typeof navigator.mediaDevices.getUserMedia === 'function',
+  mediaStream: null,
+  recordingStartTime: null,
+  loopBackup: null,
+  pendingSeekAfterReady: null,
 
   initAudioContext: () => {
     const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
@@ -481,7 +491,14 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
   },
 
   play: () => {
+    const { tracks } = get();
     logger.debug('🎵 PLAY called - instances:', wavesurferInstances.size);
+
+    // Check if any track is armed for recording
+    const armedTrack = tracks.find((t) => t.isArmed && t.isRecordable);
+    if (armedTrack) {
+      get().startRecording(armedTrack.id);
+    }
 
     // Clear finished set at the start of each play
     finishedInstances.clear();
@@ -501,6 +518,20 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
   },
 
   pause: () => {
+    const { tracks } = get();
+    
+    // Stop recording if any track is recording
+    const recordingTrack = tracks.find((t) => t.recordingState === 'recording');
+    if (recordingTrack) {
+      get().stopRecording(recordingTrack.id);
+    }
+    
+    // Disarm any armed track
+    const armedTrack = tracks.find((t) => t.isArmed);
+    if (armedTrack) {
+      get().toggleRecordArm(armedTrack.id); // Will disarm it
+    }
+
     // Pause all WaveSurfer instances simultaneously
     const instances = Array.from(wavesurferInstances.values());
     instances.forEach((ws) => {
@@ -1009,11 +1040,23 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
       const fileData = allFiles.find(f => f.id === trackId);
       const trackSetting = settings.trackSettings.find(s => s.id === trackId);
       
-      if (fileData && trackSetting) {
-        tracksData.push({
-          ...trackSetting,
-          file: fileData.file,
-        } as AudioTrack);
+      if (trackSetting) {
+        // Recordable tracks may not have a file yet
+        if (trackSetting.isRecordable) {
+          tracksData.push({
+            ...trackSetting,
+            file: fileData?.file,
+            isRecordable: true,
+            isArmed: false,
+            recordingState: 'idle',
+          } as AudioTrack);
+        } else if (fileData) {
+          // Regular tracks need a file
+          tracksData.push({
+            ...trackSetting,
+            file: fileData.file,
+          } as AudioTrack);
+        }
       }
     }
 
@@ -1211,6 +1254,327 @@ export const useAudioStore = create<AudioStore>((set, get) => ({
     }
 
     return totalSize;
+  },
+
+  // Clean orphaned data (files without pieces, trackIds without files)
+  cleanOrphanedData: async (): Promise<{ filesDeleted: number; referencesRemoved: number }> => {
+    console.log('🧹 Starting orphaned data cleanup...');
+    
+    const pieces = await getAllPieces();
+    const allFiles = await getAllAudioFiles();
+    
+    console.log(`📊 Found ${pieces.length} pieces and ${allFiles.length} files in IndexedDB`);
+    
+    let filesDeleted = 0;
+    let referencesRemoved = 0;
+    
+    for (const piece of pieces) {
+      // Get piece settings - this is the SOURCE OF TRUTH
+      const settings = await getPieceSettings(piece.id);
+      if (!settings) {
+        console.warn(`⚠️ No settings found for piece ${piece.name}, skipping cleanup`);
+        continue;
+      }
+      
+      // Valid track IDs = those in pieceSettings.trackSettings
+      const validTrackIds = new Set(settings.trackSettings.map(t => t.id));
+      console.log(`📦 Piece "${piece.name}" has ${settings.trackSettings.length} valid tracks in settings`);
+      console.log(`   piece.trackIds has ${piece.trackIds.length} entries`);
+      
+      let pieceModified = false;
+      
+      // Clean piece.trackIds - keep only those in trackSettings
+      const cleanedTrackIds = piece.trackIds.filter(trackId => {
+        const isValid = validTrackIds.has(trackId);
+        if (!isValid) {
+          console.log(`🗑️ Removing invalid trackId from piece.trackIds: ${trackId}`);
+          referencesRemoved++;
+          pieceModified = true;
+        }
+        return isValid;
+      });
+      
+      // Update piece.trackIds if changed
+      if (pieceModified) {
+        piece.trackIds = cleanedTrackIds;
+        piece.updatedAt = Date.now();
+        await savePiece(piece);
+        console.log(`✅ Updated piece.trackIds for "${piece.name}": ${cleanedTrackIds.length} valid tracks`);
+      }
+      
+      // Delete files NOT in trackSettings for this piece
+      for (const file of allFiles) {
+        // Check if this file is referenced by this piece's trackSettings
+        if (piece.trackIds.includes(file.id) && !validTrackIds.has(file.id)) {
+          console.log(`🗑️ Deleting orphaned file: ${file.id} (${file.file?.name || 'unknown'})`);
+          await deleteAudioFile(file.id);
+          filesDeleted++;
+        }
+      }
+    }
+    
+    console.log(`🧹 Cleanup complete: ${filesDeleted} orphaned files deleted, ${referencesRemoved} invalid references removed`);
+    
+    return { filesDeleted, referencesRemoved };
+  },
+
+  // Recording actions
+  addRecordableTrack: async () => {
+    const { tracks, pause, currentPieceId, createPiece } = get();
+
+    if (tracks.length >= 8) {
+      alert('Maximum 8 tracks allowed');
+      return;
+    }
+
+    // Create piece if none exists
+    let pieceId = currentPieceId;
+    if (!pieceId) {
+      pieceId = await createPiece(generatePieceName());
+    }
+
+    // Pause playback (but keep cursor position)
+    pause();
+    // DON'T seek(0) - keep current position!
+
+    // Generate name with date/time
+    const name = generatePieceName();
+    const id = `track-${Date.now()}-${Math.random()}`;
+    const color = COLORS[tracks.length % COLORS.length];
+
+    const newTrack: AudioTrack = {
+      id,
+      name,
+      volume: 1.0, // Max volume for recordings (normalized)
+      isMuted: false,
+      isSolo: false,
+      color,
+      isRecordable: true,
+      isArmed: false,
+      recordingState: 'idle',
+    };
+
+    const newTracks = [...tracks, newTrack];
+    set({ tracks: newTracks });
+
+    // Save settings to piece
+    const state = get();
+    await saveTrackSettingsToPiece(
+      pieceId!,
+      state.tracks,
+      state.loopState,
+      state.playbackState.playbackRate,
+      state.masterVolume
+    );
+
+    // Update piece
+    const piece = await getPiece(pieceId!);
+    if (piece) {
+      piece.updatedAt = Date.now();
+      await savePiece(piece);
+    }
+
+    logger.debug('🎙️ Added recordable track:', name);
+  },
+
+  toggleRecordArm: (trackId: string) => {
+    const { tracks, loopState } = get();
+
+    const track = tracks.find((t) => t.id === trackId);
+    if (!track || !track.isRecordable) return;
+
+    const newArmedState = !track.isArmed;
+
+    // If arming, save and disable loop
+    if (newArmedState && loopState.activeLoopId !== null) {
+      set({
+        loopBackup: { activeLoopId: loopState.activeLoopId },
+        loopState: { ...loopState, activeLoopId: null },
+      });
+    }
+
+    // If disarming, restore loop
+    if (!newArmedState) {
+      const { loopBackup } = get();
+      if (loopBackup) {
+        set({
+          loopState: { ...loopState, activeLoopId: loopBackup.activeLoopId },
+          loopBackup: null,
+        });
+      }
+    }
+
+    // Update tracks (exclusive arm)
+    const updatedTracks = tracks.map((t) => ({
+      ...t,
+      isArmed: t.id === trackId ? newArmedState : false,
+      recordingState: t.id === trackId && newArmedState ? ('armed' as const) : ('idle' as const),
+    }));
+
+    set({ tracks: updatedTracks });
+    logger.debug(`🎙️ ${newArmedState ? 'Armed' : 'Disarmed'} track:`, track.name);
+  },
+
+  startRecording: async (trackId: string) => {
+    const { tracks, playbackState, audioContext } = get();
+
+    const track = tracks.find((t) => t.id === trackId);
+    if (!track || !track.isArmed) return;
+
+    // Get PRECISE time from WaveSurfer instance (sample-accurate)
+    let recordingStartOffset = 0;
+    
+    // Try to get precise time from first WaveSurfer instance
+    const firstWavesurfer = Array.from(wavesurferInstances.values())[0];
+    if (firstWavesurfer) {
+      recordingStartOffset = firstWavesurfer.getCurrentTime();
+      console.log(`⏱️ Recording armed at PRECISE time from WaveSurfer: ${recordingStartOffset.toFixed(6)}s`);
+    } else {
+      // Fallback to playbackState (less precise)
+      recordingStartOffset = playbackState.currentTime;
+      console.log(`⏱️ Recording armed at playbackState time: ${recordingStartOffset.toFixed(6)}s (less precise)`);
+    }
+    
+    if (audioContext) {
+      console.log(`⏱️ AudioContext.currentTime: ${audioContext.currentTime.toFixed(6)}s`);
+    }
+    
+    set({
+      recordingStartTime: recordingStartOffset,
+      tracks: tracks.map((t) =>
+        t.id === trackId 
+          ? { ...t, recordingState: 'recording' as const, recordingStartOffset } 
+          : t
+      ),
+    });
+
+    logger.debug('🎙️ Recording started at offset:', recordingStartOffset);
+  },
+
+  stopRecording: async (trackId: string) => {
+    const { tracks } = get();
+
+    set({
+      tracks: tracks.map((t) =>
+        t.id === trackId ? { ...t, recordingState: 'stopped' as const } : t
+      ),
+      recordingStartTime: null,
+    });
+    
+    logger.debug('🎙️ Recording stopped');
+  },
+
+  // Called by WaveformDisplay when recording is complete with blob
+  saveRecording: async (trackId: string, blob: Blob) => {
+    const { currentPieceId, loopState, playbackState, masterVolume, tracks } = get();
+    
+    const track = tracks.find(t => t.id === trackId);
+    if (!track) return;
+
+    // Save the recording start offset to seek back to it
+    const recordingStartOffset = track.recordingStartOffset || 0;
+
+    // Create File from blob
+    const fileName = `${track.name}.wav`;
+    const file = new File([blob], fileName, { type: 'audio/wav' });
+
+    // Save to IndexedDB
+    try {
+      await saveAudioFile(trackId, file);
+
+      // Update piece
+      if (currentPieceId) {
+        const piece = await getPiece(currentPieceId);
+        if (piece && !piece.trackIds.includes(trackId)) {
+          piece.trackIds = [...piece.trackIds, trackId];
+          piece.updatedAt = Date.now();
+          await savePiece(piece);
+        }
+
+        // Save piece settings with updated track
+        const updatedTracks = get().tracks.map((t) =>
+          t.id === trackId
+            ? { ...t, recordedBlob: blob, file, recordingState: 'stopped' as const }
+            : t
+        );
+
+        await saveTrackSettingsToPiece(
+          currentPieceId,
+          updatedTracks,
+          loopState,
+          playbackState.playbackRate,
+          masterVolume
+        );
+      }
+
+      logger.debug('🎙️ Recording saved to IndexedDB:', blob.size, 'bytes');
+
+      // Update state - this will trigger RecordableWaveform → WaveformDisplay switch
+      set((state) => ({
+        tracks: state.tracks.map((t) =>
+          t.id === trackId
+            ? { ...t, recordedBlob: blob, file, recordingState: 'stopped' as const }
+            : t
+        ),
+        // Set pending seek - WaveformDisplay will pick this up on 'ready' event
+        pendingSeekAfterReady: recordingStartOffset,
+      }));
+
+      console.log(`⏱️ Pending seek after waveform ready: ${recordingStartOffset.toFixed(4)}s`);
+
+    } catch (error) {
+      console.error('Failed to save recording:', error);
+    }
+  },
+
+  clearRecording: async (trackId: string) => {
+    const { currentPieceId, loopState, playbackState, masterVolume, tracks } = get();
+    
+    const track = tracks.find(t => t.id === trackId);
+    if (!track || !track.isRecordable) return;
+
+    try {
+      // Delete audio file from IndexedDB
+      await deleteAudioFile(trackId);
+
+      // Update piece to remove trackId (if exists)
+      if (currentPieceId) {
+        const piece = await getPiece(currentPieceId);
+        if (piece && piece.trackIds.includes(trackId)) {
+          piece.trackIds = piece.trackIds.filter(id => id !== trackId);
+          piece.updatedAt = Date.now();
+          await savePiece(piece);
+        }
+
+        // Save piece settings (track remains but without file)
+        const updatedTracks = tracks.map((t) =>
+          t.id === trackId
+            ? { ...t, recordedBlob: undefined, file: undefined, recordingState: 'idle' as const }
+            : t
+        );
+
+        await saveTrackSettingsToPiece(
+          currentPieceId,
+          updatedTracks,
+          loopState,
+          playbackState.playbackRate,
+          masterVolume
+        );
+      }
+
+      logger.debug('🗑️ Cleared recording for track:', trackId);
+
+      // Update state
+      set((state) => ({
+        tracks: state.tracks.map((t) =>
+          t.id === trackId
+            ? { ...t, recordedBlob: undefined, file: undefined, recordingState: 'idle' as const }
+            : t
+        ),
+      }));
+    } catch (error) {
+      console.error('Failed to clear recording:', error);
+    }
   },
 }));
 

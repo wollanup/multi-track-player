@@ -174,7 +174,34 @@
     "deleteConfirmTitle": "Supprimer la piste ?",
     "expand": "Agrandir",
     "importing": "Import du fichier en cours...",
-    "loading": "Chargement..."
+    "loading": "Chargement...",
+    "addAudioTrack": "Ajouter piste audio",
+    "importAudioTrack": "Importer piste audio",
+    "addRecordableTrack": "Ajouter piste d'enregistrement",
+    "count": "{{current}}/{{max}} pistes"
+  },
+  "recording": {
+    "title": "Enregistrement",
+    "armTrack": "Armer pour enregistrement",
+    "readyToRecord": "Prêt à enregistrer - Appuyez sur REC",
+    "armToRecord": "Armez la piste pour enregistrer",
+    "recording": "Enregistrement en cours",
+    "stopped": "Arrêté",
+    "notSupported": "L'enregistrement n'est pas supporté par votre navigateur",
+    "loopsDisabled": "Les boucles sont désactivées pendant l'enregistrement",
+    "loopsDisabledDuringRec": "Boucles désactivées (mode enregistrement)",
+    "startRecording": "Démarrer l'enregistrement",
+    "pauseRecording": "Pause (enregistrement en cours)",
+    "clearRecording": "Effacer l'enregistrement",
+    "downloadRecording": "Télécharger l'enregistrement",
+    "clearRecordingFirst": "Effacez d'abord l'enregistrement pour armer",
+    "errors": {
+      "permissionDenied": "Permission microphone refusée. Veuillez autoriser l'accès pour enregistrer.",
+      "noMicrophone": "Aucun microphone détecté. Veuillez connecter un microphone.",
+      "maxTracksReached": "Limite de 8 pistes atteinte",
+      "alreadyArmed": "Une autre piste est déjà armée",
+      "unknown": "Échec de l'enregistrement"
+    }
   },
   "units": {
     "bytes": "o",
@@ -184,6 +211,7 @@
   },
   "upload": {
     "description": "Déposez des fichiers audio ici ou cliquez pour sélectionner",
+    "dropHere": "Déposez vos fichiers ici",
     "title": "Ajouter des pistes audio"
   }
 }

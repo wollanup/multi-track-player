@@ -174,7 +174,34 @@
     "deleteConfirmTitle": "Delete Track?",
     "expand": "Expand",
     "importing": "Importing file...",
-    "loading": "Loading..."
+    "loading": "Loading...",
+    "addAudioTrack": "Add Audio Track",
+    "importAudioTrack": "Import Audio Track",
+    "addRecordableTrack": "Add Recording Track",
+    "count": "{{current}}/{{max}} tracks"
+  },
+  "recording": {
+    "title": "Recording",
+    "armTrack": "Arm for recording",
+    "readyToRecord": "Ready to record - Press Play",
+    "armToRecord": "Arm track to record",
+    "recording": "Recording",
+    "stopped": "Stopped",
+    "notSupported": "Recording is not supported by your browser",
+    "loopsDisabled": "Loops are disabled during recording",
+    "loopsDisabledDuringRec": "Loops disabled (recording mode)",
+    "startRecording": "Start Recording",
+    "pauseRecording": "Pause (recording in progress)",
+    "clearRecording": "Clear recording",
+    "downloadRecording": "Download recording",
+    "clearRecordingFirst": "Delete recording first to arm",
+    "errors": {
+      "permissionDenied": "Microphone permission denied. Please allow access to record.",
+      "noMicrophone": "No microphone detected. Please connect a microphone.",
+      "maxTracksReached": "8 track limit reached",
+      "alreadyArmed": "Another track is already armed",
+      "unknown": "Recording failed"
+    }
   },
   "units": {
     "bytes": "B",
@@ -184,6 +211,7 @@
   },
   "upload": {
     "description": "Drop audio files here or click to select",
+    "dropHere": "Drop your files here",
     "title": "Add Audio Tracks"
   }
 }
