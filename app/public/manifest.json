@@ -6,9 +6,9 @@
   "background_color": "#0a0e27",
   "display": "standalone",
   "orientation": "portrait",
-  "scope": "/stemux/",
-  "start_url": "/stemux/",
-  "id": "/stemux/",
+  "scope": "/",
+  "start_url": "/",
+  "id": "/",
   "icons": [
     {
       "src": "icons/android/android-launchericon-48-48.png",

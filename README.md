@@ -59,7 +59,7 @@ A modern, browser-based multi-track audio player designed for musicians who want
 ## 🚀 Quick Start
 
 ### 🌐 **Try it Online**
-Visit [https://wollanup.github.io/stemux/](https://wollanup.github.io/stemux/) to start using Stemux immediately - no installation required!
+Visit [https://app.stemux.fr](https://app.stemux.fr) to start using Stemux immediately - no installation required!
 
 ### 💻 **Run Locally**
 

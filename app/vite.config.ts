@@ -43,9 +43,9 @@ export default defineConfig({
         background_color: '#222',
         display: 'standalone',
         orientation: 'any',
-        scope: '/stemux/',
-        start_url: '/stemux/',
-        id: '/stemux/',
+        scope: '/',
+        start_url: '/',
+        id: '/',
         icons: [
           {
             src: 'icons/android/android-launchericon-48-48.png',
@@ -166,7 +166,7 @@ export default defineConfig({
       }
     })
   ],
-  base: '/stemux/',
+  base: '/',
   server: {
     hmr: {
       overlay: true,
