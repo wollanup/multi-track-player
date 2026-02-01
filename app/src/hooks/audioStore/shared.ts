@@ -1,0 +1,116 @@
+/**
+ * Shared utilities and constants for audioStore
+ */
+
+import type WaveSurfer from 'wavesurfer.js';
+
+// Track colors palette
+export const COLORS = [
+  '#4ECDC4', '#FFA07A', '#BB8FCE', '#F7DC6F',
+  '#85C1E2', '#FF6B6B', '#98D8C8', '#e680a5',
+];
+
+// WaveSurfer instances registry (outside Zustand to avoid re-renders)
+export const wavesurferInstances = new Map<string, WaveSurfer>();
+
+// Track which instances have finished playing
+export const finishedInstances = new Set<string>();
+
+// Global flag to prevent feedback loops during sync
+let isSynchronizing = false;
+export const getIsSynchronizing = () => isSynchronizing;
+export const setIsSynchronizing = (value: boolean) => {
+  isSynchronizing = value;
+};
+
+// Generate piece name from date/time
+export const generatePieceName = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  return `${year}-${month}-${day}_${hours}-${minutes}`;
+};
+
+// LocalStorage helpers
+export const loadCurrentPieceId = () => {
+  return localStorage.getItem('current-piece-id');
+};
+
+export const saveCurrentPieceId = (id: string | null) => {
+  if (id) {
+    localStorage.setItem('current-piece-id', id);
+  } else {
+    localStorage.removeItem('current-piece-id');
+  }
+};
+
+// Legacy loaders for migration
+export const loadTrackSettings = () => {
+  const stored = localStorage.getItem('practice-tracks-settings');
+  return stored ? JSON.parse(stored) : [];
+};
+
+export const loadPlaybackRate = () => {
+  const stored = localStorage.getItem('practice-tracks-playback-rate');
+  return stored ? parseFloat(stored) : 1.0;
+};
+
+export const loadMasterVolume = () => {
+  const stored = localStorage.getItem('practice-tracks-master-volume');
+  return stored ? parseFloat(stored) : 1.0;
+};
+
+export const loadLoopV2State = () => {
+  const stored = localStorage.getItem('practice-tracks-loop-v2');
+  if (stored) {
+    try {
+      return JSON.parse(stored);
+    } catch (e) {
+      console.warn('⚠️ Failed to parse loop v2 state:', e);
+    }
+  }
+  return {
+    markers: [],
+    loops: [],
+    activeLoopId: null,
+  };
+};
+
+export const loadWaveformStyle = () => {
+  const stored = localStorage.getItem('waveform-style');
+  return stored || 'modern';
+};
+
+export const saveWaveformStyle = (style: string) => {
+  localStorage.setItem('waveform-style', style);
+};
+
+export const loadWaveformNormalize = () => {
+  const stored = localStorage.getItem('waveform-normalize');
+  return stored ? stored === 'true' : false;
+};
+
+export const saveWaveformNormalize = (normalize: boolean) => {
+  localStorage.setItem('waveform-normalize', normalize.toString());
+};
+
+export const loadWaveformTimeline = () => {
+  const stored = localStorage.getItem('waveform-timeline');
+  return stored ? stored === 'true' : false;
+};
+
+export const saveWaveformTimeline = (timeline: boolean) => {
+  localStorage.setItem('waveform-timeline', timeline.toString());
+};
+
+export const loadWaveformMinimap = () => {
+  const stored = localStorage.getItem('waveform-minimap');
+  return stored ? stored === 'true' : false;
+};
+
+export const saveWaveformMinimap = (minimap: boolean) => {
+  localStorage.setItem('waveform-minimap', minimap.toString());
+};
